@@ -51,7 +51,7 @@ Ký hiệu: **P0** bắt buộc · **P1** nên có · **P2** mở rộng.
 - [x] P0 USER không sửa/hủy booking của người khác (403)
 - [x] P1 ADMIN xem tất cả booking, lọc theo room/user/time
 - [x] P1 Giới hạn số booking tương lai đang hoạt động / user (cấu hình)
-- [ ] P2 Đặt lịch lặp (hàng ngày/tuần), hủy cả chuỗi
+- [x] P2 Đặt lịch lặp (hằng tuần / 2 tuần / ngày làm việc), hủy từ buổi này trở đi
 - [ ] P2 Người tham dự, thông báo email
 - [ ] P2 Check-in & tự giải phóng no-show
 
@@ -60,7 +60,7 @@ Ký hiệu: **P0** bắt buộc · **P1** nên có · **P2** mở rộng.
 - [x] P0 Lịch tất cả phòng trong 1 ngày
 - [x] P0 Chỉ hiển thị booking CONFIRMED
 - [x] P1 Hiển thị người đặt + tiêu đề (cân nhắc ẩn chi tiết với user khác – ghi trong README)
-- [ ] P2 Export iCal (chưa làm, ngoài phạm vi)
+- [x] P2 Thêm vào lịch (.ics, tạo ở trình duyệt cho từng booking). Chưa có feed đăng ký lịch
 
 ## 6. Tìm phòng trống
 - [x] P0 `GET /rooms/available?start&end` trả các phòng active không có booking chồng lấn
@@ -98,4 +98,13 @@ Ký hiệu: **P0** bắt buộc · **P1** nên có · **P2** mở rộng.
 - [x] P0 Admin: phòng (thêm/sửa/vô hiệu/kích hoạt), người dùng (tạo/sửa/khóa/đặt lại mật khẩu), tất cả booking (lọc, type-ahead người dùng)
 - [x] P0 Trạng thái loading (skeleton), rỗng, lỗi (có Thử lại), toast, xác nhận hành động nguy hiểm
 - [x] P0 Responsive (thanh điều hướng dưới trên mobile), dark mode, focus rõ ràng, nhãn form truy cập được
-- [ ] P2 E2E test giao diện trong CI (hiện đã kiểm tra bằng Playwright thủ công, chưa đưa vào repo)
+- [x] P1 E2E giao diện bằng Playwright trong `e2e/` (chạy tay trên stack đang chạy; chưa đưa vào CI)
+
+## 11. Bổ sung sau vòng review
+- [x] P0 Số người tham dự bắt buộc, không vượt sức chứa (`OVER_CAPACITY`)
+- [x] P0 Đổi phòng khi sửa booking (kiểm tra xung đột/sức chứa ở phòng mới)
+- [x] P0 Chặn phòng theo khoảng thời gian (admin), tùy chọn hủy booking trùng; hiển thị trên lịch; gỡ chặn
+- [x] P0 Trang Tài khoản: đổi mật khẩu
+- [x] P0 Giao diện tiếng Anh (mặc định) và tiếng Việt, lưu lựa chọn, lỗi server dịch theo mã
+- [ ] Không làm (đã loại): SSO, email/thông báo, mời người tham dự/khách, mọi tích hợp dịch vụ ngoài
+- [ ] P2 Báo cáo sử dụng, audit log, no-show/check-in (chưa làm)

@@ -7,9 +7,9 @@ kể cả khi nhiều người đặt cùng lúc, và đủ chắc chắn để 
 |---|---|
 | Backend | Java 21, Spring Boot 3.4, Spring Security (JWT), Spring Data JPA, Flyway |
 | Database | PostgreSQL 16 (exclusion constraint chống trùng lịch) |
-| Frontend | React 18 + TypeScript + Vite, TanStack Query, phục vụ bởi nginx (proxy `/api`) |
+| Frontend | React 18 + TypeScript + Vite, TanStack Query, phục vụ bởi nginx (proxy `/api`); giao diện **tiếng Anh (mặc định) / tiếng Việt** |
 | Chạy | Docker Compose (db + app + web) |
-| Test | JUnit 5 + MockMvc trên PostgreSQL thật, test đồng thời (72 test) |
+| Test | JUnit 5 + MockMvc trên PostgreSQL thật, test đồng thời (92 test) + e2e giao diện bằng Playwright (`e2e/`) |
 
 ## 1. Chạy nhanh
 
@@ -44,6 +44,10 @@ Tài khoản demo (profile `demo` bật sẵn trong compose, có 10 phòng + và
 
 Hoặc có Java 21 + Postgres: `TEST_DB_URL=jdbc:postgresql://localhost:5432/booking_test mvn test`.
 
+Kiểm thử giao diện (cần stack đang chạy): xem [e2e/README.md](e2e/README.md).
+
+> Máy ít RAM (Docker VM ~2GB): hãy `docker compose stop` stack trước khi chạy `./scripts/test.sh`, nếu không JVM của test có thể bị kernel kill (exit code 137).
+
 ### Phát triển local
 
 ```bash
@@ -55,11 +59,17 @@ cd frontend && npm install && npm run dev     # http://localhost:5173, proxy /ap
 
 ## 2. Tính năng
 
-**Nhân viên:** xem lịch tất cả phòng theo ngày (timeline, bấm vào ô trống để đặt) · tìm phòng trống theo ngày/giờ/số chỗ/thiết bị ·
-đặt, sửa, hủy booking của mình · xem booking sắp tới / đã qua / đã hủy · đổi mật khẩu.
+**Nhân viên:** xem lịch tất cả phòng theo ngày (timeline, bấm vào ô trống để đặt) · tìm phòng trống theo ngày/giờ/số người/thiết bị ·
+đặt, sửa (kể cả **đổi sang phòng khác**), hủy booking của mình · nhập **số người tham dự** (không vượt sức chứa) ·
+**đặt lịch lặp** (hằng tuần, 2 tuần/lần, các ngày làm việc; trùng thì báo ngày nào và cho chọn bỏ qua) · hủy một buổi hoặc "buổi này và các buổi sau" ·
+**thêm vào lịch (.ics)** · xem lịch sắp tới / đã qua / đã hủy · đổi mật khẩu ở trang Tài khoản.
 
 **Quản trị:** thêm/sửa/vô hiệu hóa phòng · quản lý người dùng (tạo, đổi vai trò, khóa, đặt lại mật khẩu) ·
-xem và hủy mọi booking, lọc theo phòng/người/trạng thái/khoảng ngày.
+xem và hủy mọi booking, lọc theo phòng/người/loại/trạng thái/khoảng ngày · **chặn phòng theo khoảng thời gian** (bảo trì, vệ sinh, sự kiện),
+nếu đang có booking trùng thì xem danh sách và chọn hủy chúng rồi chặn.
+
+**Ngôn ngữ:** nút EN/VI ở thanh trên cùng (và ở trang đăng nhập). Mặc định luôn là tiếng Anh, lựa chọn được nhớ lại.
+Bản dịch tiếng Việt bị ép đủ khóa lúc biên dịch (TypeScript), lỗi từ server được dịch theo `code` ổn định.
 
 **Quy tắc đặt phòng** (cấu hình trong `application.yml`, UI đọc qua `GET /api/v1/config`, không hard-code):
 
@@ -72,6 +82,8 @@ xem và hủy mọi booking, lọc theo phòng/người/trạng thái/khoảng n
 | Không xuyên ngày | | `CROSS_DAY_BOOKING` |
 | Tối đa 50 booking tương lai/người (giới hạn mềm) | | `BOOKING_LIMIT_REACHED` |
 | Phòng phải đang hoạt động | | `ROOM_INACTIVE` |
+| Số người ≤ sức chứa phòng | bắt buộc nhập | `OVER_CAPACITY` |
+| Lịch lặp: tối đa 26 buổi, mỗi buổi qua đủ các quy tắc trên | | `SERIES_CONFLICT`, `START_ON_WEEKEND` |
 
 Trùng lịch → **409 `BOOKING_CONFLICT`**. Hai booking liền kề (10:00–11:00 và 11:00–12:00) **không** trùng.
 
@@ -152,7 +164,8 @@ Bước "kiểm tra trước" ở service chỉ để trả lỗi sớm; nếu h
 | GET/POST/PUT/DELETE | `/rooms`, `/rooms/{id}`, POST `/rooms/{id}/activate` | đọc: user; ghi: admin |
 | GET | `/rooms/available?start&end&minCapacity&equipment` | user |
 | GET | `/rooms/{id}/schedule?date=` hoặc `?from=&to=` · `/rooms/{id}/free-slots?date=&minDuration=` · `/schedule?date=` | user |
-| POST | `/bookings` · PUT `/bookings/{id}` · POST `/bookings/{id}/cancel` · GET `/bookings/{id}` | chủ booking / admin |
+| POST | `/bookings` · POST `/bookings/series` (lịch lặp) · PUT `/bookings/{id}` (có thể đổi `roomId`) · POST `/bookings/{id}/cancel` · POST `/bookings/{id}/cancel-series` · GET `/bookings/{id}` | chủ booking / admin |
+| POST | `/admin/blocks` (chặn phòng; `cancelConflicting`) · gỡ chặn: `/bookings/{id}/cancel` · liệt kê: GET `/bookings?kind=BLOCK` | admin |
 | GET | `/bookings/my` | user · `/bookings` (tất cả): admin |
 | * | `/admin/users[...]` | admin |
 
@@ -177,6 +190,9 @@ curl -s "localhost:8080/api/v1/rooms/available?start=2030-01-15T10:00:00%2B07:00
 | Khoảng nửa mở `[start, end)` | Họp liền kề không bị coi là trùng. |
 | `timestamptz` lưu UTC; nghiệp vụ (giờ làm việc, "ngày") tính theo **múi giờ công ty** cấu hình | Không phụ thuộc múi giờ máy chủ/người dùng; API trả giờ kèm offset công ty. |
 | Hủy mềm (`CANCELLED`) và vô hiệu hóa phòng thay vì xóa | Giữ lịch sử/báo cáo; ràng buộc FK không bị phá. Vô hiệu hóa bị chặn khi còn booking tương lai (`FOR UPDATE` trên phòng để không race với đặt phòng). |
+| **Chặn phòng (block) là một dòng trong bảng `bookings`** (`kind = BLOCK`), không phải bảng riêng | Cùng exclusion constraint bảo vệ block và booking khỏi nhau, nguyên tử và an toàn đồng thời, không thêm đường code mới. Block khóa phòng `FOR UPDATE` và hủy booking trùng *trước khi* chèn. |
+| Lịch lặp: tạo toàn bộ trong 1 transaction, mỗi buổi đều qua kiểm tra như booking đơn; `FAIL` (mặc định) hoặc `SKIP` | Không bao giờ để chuỗi tạo dở; người dùng biết chính xác ngày nào trùng. Chỉ hủy theo chuỗi, sửa từng buổi (đơn giản, dễ hiểu). |
+| `.ics` tạo ngay trên trình duyệt | Không cần server/email; dùng được với Google, Outlook, Apple. |
 | Khóa user → tự hủy booking tương lai của họ | Tránh "phòng ma" bị giữ bởi người đã nghỉ. |
 | JWT stateless (HS256, TTL 60’), BCrypt | Scale ngang không cần session; kiểm tra `active` từ DB ở thao tác ghi quan trọng. Đánh đổi: xem mục Rủi ro. |
 | Lỗi chuẩn RFC 7807 + `code` ổn định | Client xử lý theo `code`, không parse câu chữ. |
@@ -204,8 +220,9 @@ curl -s "localhost:8080/api/v1/rooms/available?start=2030-01-15T10:00:00%2B07:00
 
 ## 7. Hạn chế và việc tiếp theo
 
-Chưa làm (có chủ đích, ngoài phạm vi): đặt lịch lặp, email/thông báo, check-in/tự giải phóng no-show, người tham dự, xuất iCal,
-refresh token / cookie `HttpOnly`, rate-limit tập trung, e2e test của giao diện trong CI (đã kiểm tra thủ công bằng trình duyệt headless, xem review log).
+Chưa làm (có chủ đích): thông báo email, đăng nhập SSO và mọi tích hợp dịch vụ ngoài (đã loại khỏi phạm vi), mời người tham dự / khách (xem phân tích:
+phòng vật lý chỉ cần giữ chỗ; mời chỉ cần khi có họp online), check-in/tự giải phóng no-show, báo cáo sử dụng, audit log, sửa cả chuỗi lặp một lần,
+refresh token / cookie `HttpOnly`, rate-limit tập trung. Admin hủy booking của người khác chỉ để lại lý do ở tab "Đã hủy" (chưa gửi thông báo).
 
 ## 8. Cấu trúc thư mục
 
@@ -214,6 +231,7 @@ src/main/java/com/company/booking/   backend (auth, user, room, booking, availab
 src/main/resources/db/migration/     Flyway
 src/test/                            unit + integration + concurrency
 frontend/                            React app + nginx.conf + Dockerfile
+e2e/                                 Playwright: chạy giao diện thật trên stack đang chạy
 docs/                                kế hoạch, checklist, nhật ký review, requests.http
 docker-compose.yml                   db + app + web
 docker-compose.test.yml, scripts/    chạy test trong Docker

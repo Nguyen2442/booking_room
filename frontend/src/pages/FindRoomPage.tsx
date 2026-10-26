@@ -7,11 +7,12 @@ import { useConfig, useRooms } from '../api/hooks';
 import type { Page, Room } from '../api/types';
 import { BookingDialog, type BookingDraft } from '../components/BookingDialog';
 import { Banner, Button, Chip, EmptyState, ErrorState, Field, PageHeader, Skeleton } from '../components/ui';
-import { prettyEquipment } from '../lib/format';
-import { addDays, durationLabel, fromMinutes, nowMinutesIn, todayIn, toMinutes, zonedToIso } from '../lib/time';
+import { useI18n } from '../lib/i18n';
+import { addDays, fromMinutes, nowMinutesIn, todayIn, toMinutes, zonedToIso } from '../lib/time';
 
 export function FindRoomPage() {
   const cfg = useConfig().data!;
+  const { t, tn, dur, eq, err } = useI18n();
   const [params] = useSearchParams();
   const today = todayIn(cfg.timezone);
   const ws = toMinutes(cfg.workdayStart);
@@ -27,7 +28,7 @@ export function FindRoomPage() {
   const [date, setDate] = useState(params.get('date') ?? defaults.date);
   const [start, setStart] = useState(params.get('start') ?? fromMinutes(defaults.start));
   const [end, setEnd] = useState(params.get('end') ?? fromMinutes(defaults.start + 60));
-  const [capacity, setCapacity] = useState('');
+  const [attendees, setAttendees] = useState(params.get('attendees') ?? '');
   const [equipment, setEquipment] = useState<string[]>([]);
   const [draft, setDraft] = useState<BookingDraft | null>(null);
 
@@ -44,7 +45,7 @@ export function FindRoomPage() {
   }, [ws, we, cfg.slotMinutes]);
 
   const valid = toMinutes(end) > toMinutes(start);
-  const minCap = capacity ? Math.max(1, Number(capacity)) : undefined;
+  const minCap = attendees ? Math.max(1, Number(attendees)) : undefined;
 
   const results = useQuery({
     queryKey: ['bk', 'available', date, start, end, minCap, equipment],
@@ -63,36 +64,35 @@ export function FindRoomPage() {
   });
 
   const toggle = (e: string) => setEquipment((l) => (l.includes(e) ? l.filter((x) => x !== e) : [...l, e]));
-  const pretty = prettyEquipment;
 
   return (
     <>
-      <PageHeader title="Find a room" subtitle="See which rooms are free for the time you need." />
+      <PageHeader title={t('find.title')} subtitle={t('find.subtitle')} />
 
       <form className="card filters" onSubmit={(e) => e.preventDefault()}>
-        <Field label="Date">
+        <Field label={t('common.date')}>
           <input type="date" value={date} min={today} max={addDays(today, cfg.maxAdvanceDays)} onChange={(e) => e.target.value && setDate(e.target.value)} />
         </Field>
-        <Field label="From">
+        <Field label={t('find.from')}>
           <select value={start} onChange={(e) => { setStart(e.target.value); if (toMinutes(e.target.value) >= toMinutes(end)) setEnd(fromMinutes(Math.min(toMinutes(e.target.value) + 60, we))); }}>
-            {times.slice(0, -1).map((t) => <option key={t}>{t}</option>)}
+            {times.slice(0, -1).map((x) => <option key={x}>{x}</option>)}
           </select>
         </Field>
-        <Field label="To">
+        <Field label={t('find.to')}>
           <select value={end} onChange={(e) => setEnd(e.target.value)}>
-            {times.filter((t) => toMinutes(t) > toMinutes(start)).map((t) => <option key={t}>{t}</option>)}
+            {times.filter((x) => toMinutes(x) > toMinutes(start)).map((x) => <option key={x}>{x}</option>)}
           </select>
         </Field>
-        <Field label="Minimum seats">
-          <input type="number" inputMode="numeric" min={1} max={1000} value={capacity} onChange={(e) => setCapacity(e.target.value)} placeholder="Any" />
+        <Field label={t('find.attendees')}>
+          <input type="number" inputMode="numeric" min={1} max={1000} value={attendees} onChange={(e) => setAttendees(e.target.value)} placeholder={t('find.any')} />
         </Field>
         {knownEquipment.length > 0 && (
           <div className="filters-wide">
-            <span className="field-label">Needs</span>
-            <div className="quick" role="group" aria-label="Equipment">
+            <span className="field-label">{t('find.needs')}</span>
+            <div className="quick" role="group" aria-label={t('find.equipment')}>
               {knownEquipment.map((e) => (
                 <button key={e} type="button" aria-pressed={equipment.includes(e)} className={`chip chip-btn ${equipment.includes(e) ? 'chip-active' : ''}`} onClick={() => toggle(e)}>
-                  {pretty(e)}
+                  {eq(e)}
                 </button>
               ))}
             </div>
@@ -100,22 +100,20 @@ export function FindRoomPage() {
         )}
       </form>
 
-      {!valid && <Banner tone="warning">The end time must be after the start time.</Banner>}
+      {!valid && <Banner tone="warning">{t('find.endAfter')}</Banner>}
       {valid && results.isPending && <div className="cards">{Array.from({ length: 3 }, (_, i) => <div key={i} className="card"><Skeleton h={20} w="50%" /><Skeleton h={14} /></div>)}</div>}
       {results.isError && (
         results.error instanceof ApiError && results.error.status === 422
-          ? <Banner tone="warning">{results.error.message}</Banner>
+          ? <Banner tone="warning">{err(results.error)}</Banner>
           : <ErrorState error={results.error} onRetry={() => results.refetch()} />
       )}
       {results.data && (
         <>
           <p className="muted result-count" aria-live="polite">
-            {results.data.totalElements} room{results.data.totalElements === 1 ? '' : 's'} free · {start}–{end} ({durationLabel(toMinutes(end) - toMinutes(start))})
+            {tn('find.count', results.data.totalElements, { start, end, dur: dur(toMinutes(end) - toMinutes(start)) })}
           </p>
           {results.data.content.length === 0 ? (
-            <EmptyState icon={<Search size={28} />} title="No room is free at that time">
-              Try a different time, fewer requirements, or another day.
-            </EmptyState>
+            <EmptyState icon={<Search size={28} />} title={t('find.noneTitle')}>{t('find.noneHelp')}</EmptyState>
           ) : (
             <div className="cards">
               {results.data.content.map((r) => (
@@ -126,8 +124,8 @@ export function FindRoomPage() {
                   </div>
                   {r.location && <p className="muted small"><MapPin size={14} aria-hidden /> {r.location}</p>}
                   {r.description && <p className="small">{r.description}</p>}
-                  <div className="quick">{r.equipment.map((e) => <Chip key={e}>{pretty(e)}</Chip>)}</div>
-                  <Button variant="primary" onClick={() => setDraft({ roomId: r.id, date, start, end })}>Book this room</Button>
+                  <div className="quick">{r.equipment.map((e) => <Chip key={e}>{eq(e)}</Chip>)}</div>
+                  <Button variant="primary" onClick={() => setDraft({ roomId: r.id, date, start, end, attendees: minCap })}>{t('find.book')}</Button>
                 </article>
               ))}
             </div>

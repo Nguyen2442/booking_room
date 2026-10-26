@@ -6,6 +6,8 @@ export class ApiError extends Error {
     public code: string,
     message: string,
     public fieldErrors: Record<string, string> = {},
+    /** the full problem+json body: carries details such as `conflicts` */
+    public problem: Record<string, any> = {},
   ) {
     super(message);
   }
@@ -87,12 +89,8 @@ export async function api<T = void>(path: string, opts: Options = {}): Promise<T
     const fieldErrors: Record<string, string> = {};
     for (const e of data?.errors ?? []) if (e.field && !fieldErrors[e.field]) fieldErrors[e.field] = e.message;
     const fallback = res.status >= 500 ? 'Something went wrong on our side. Please try again.' : 'Request failed.';
-    throw new ApiError(res.status, data?.code ?? `HTTP_${res.status}`, data?.detail ?? fallback, fieldErrors);
+    throw new ApiError(res.status, data?.code ?? `HTTP_${res.status}`, data?.detail ?? fallback, fieldErrors, data ?? {});
   }
   return data as T;
 }
 
-export function errorMessage(e: unknown): string {
-  if (e instanceof ApiError) return e.message;
-  return 'Something went wrong. Please try again.';
-}

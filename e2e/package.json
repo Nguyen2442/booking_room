@@ -1,0 +1,12 @@
+{
+  "name": "meeting-room-booking-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install-browser": "playwright install chromium",
+    "basic": "node basic-flows.mjs ../e2e/screenshots",
+    "features": "node features.mjs ../e2e/screenshots",
+    "test": "node basic-flows.mjs ../e2e/screenshots && node features.mjs ../e2e/screenshots"
+  },
+  "dependencies": { "playwright": "^1.49.0" }
+}

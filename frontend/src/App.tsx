@@ -3,6 +3,8 @@ import { AppLayout } from './components/AppLayout';
 import { ErrorState, Spinner } from './components/ui';
 import { useConfig } from './api/hooks';
 import { useAuth } from './lib/auth';
+import { AccountPage } from './pages/AccountPage';
+import { AdminBlocksPage } from './pages/AdminBlocksPage';
 import { AdminBookingsPage } from './pages/AdminBookingsPage';
 import { AdminRoomsPage } from './pages/AdminRoomsPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
@@ -31,10 +33,12 @@ export default function App() {
         <Route path="/" element={<SchedulePage />} />
         <Route path="/find" element={<FindRoomPage />} />
         <Route path="/my" element={<MyBookingsPage />} />
+        <Route path="/account" element={<AccountPage />} />
       </Route>
       <Route element={<RequireAuth admin />}>
         <Route path="/admin/rooms" element={<AdminRoomsPage />} />
         <Route path="/admin/bookings" element={<AdminBookingsPage />} />
+        <Route path="/admin/blocks" element={<AdminBlocksPage />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

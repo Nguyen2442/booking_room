@@ -39,6 +39,23 @@ do test tự động hay do chạy thử bằng trình duyệt thật.
 | 24 | Múi giờ của máy người dùng khác múi giờ công ty | Đặt nhầm giờ | Review | Mọi phép tính giờ theo múi giờ công ty lấy từ `/config` |
 | 25 | Danh sách người dùng 200+ không vừa `<select>` | Admin không lọc được | Review | `UserPicker` type-ahead |
 
+## Vòng bổ sung: số người, lịch lặp, chặn phòng, tiếng Việt
+
+| # | Câu hỏi / bad case | Hậu quả nếu bỏ qua | Cách phát hiện | Cải thiện |
+|---|---|---|---|---|
+| 26 | Admin chặn phòng đúng lúc có người đang đặt phòng đó? | Block chèn xong rồi vẫn còn booking chồng, hoặc bị constraint từ chối giữa chừng | Review + test đồng thời | Khóa phòng `FOR UPDATE`; hủy booking trùng và **flush trước** khi chèn block (test `blockingRacingWithBookingsNeverLeavesAnOverlap`) |
+| 27 | Block có làm hỏng "vô hiệu hóa phòng" và "giới hạn 50 booking/người"? | Phòng chỉ có block không thể đóng; admin bị tính vào giới hạn | Review | Các truy vấn đó chỉ tính `kind = BOOKING`; test `blocksDoNotCountAsEmployeeBookings` |
+| 28 | Người thường xem/hủy/sửa block của admin? | Nhân viên gỡ chặn phòng đang bảo trì | Review | `authorize` yêu cầu admin cho `BLOCK`; sửa block bị 422 `BLOCK_NOT_EDITABLE` |
+| 29 | Lịch lặp: một tuần trùng thì sao? Toàn bộ chuỗi hủy hay tạo dở? | Chuỗi tạo dở, người dùng không biết thiếu ngày nào | Review | Mặc định `FAIL` + trả danh sách ngày trùng; `SKIP` tạo phần còn lại; tất cả trong 1 transaction; nếu bỏ qua *hết* thì vẫn là lỗi |
+| 30 | Chuỗi chạy quá giới hạn đặt trước 90 ngày; chuỗi "ngày làm việc" bắt đầu vào Chủ nhật | Báo lỗi muộn, khó hiểu | Review | Mỗi buổi qua `BookingRules` (báo đúng ngày vi phạm); UI tính trước số buổi tối đa và ngày cuối; `START_ON_WEEKEND` |
+| 31 | Đổi phòng khi sửa booking: phòng mới đầy, quá nhỏ, đang bị đóng? | Booking nằm trong phòng không hợp lệ | Review | Cùng đường kiểm tra `bookableRoom` + loại trừ chính nó khi tìm xung đột (test `movingIsRefused...`) |
+| 32 | Báo xung đột nằm cuối form dài, người dùng không thấy | Bấm đặt mà tưởng không có gì xảy ra | Ảnh chụp e2e | Tự cuộn tới khối thông báo |
+| 33 | Thanh điều hướng admin có 7 mục: bị cắt chữ; trên mobile `space-around` làm mục đầu không cuộn tới được | Mất điều hướng | Ảnh chụp ở 3 cỡ màn hình + đo vị trí phần tử | Icon-only ở cỡ trung, `flex:1 0 auto` + cuộn trên mobile |
+| 34 | Máy người dùng có ngôn ngữ trình duyệt là tiếng Việt: có tự đổi giao diện? | Trái yêu cầu "mặc định tiếng Anh" | Test e2e với `locale: vi-VN` | Không đoán theo trình duyệt; chỉ theo lựa chọn đã lưu |
+| 35 | Bản dịch thiếu khóa → nhãn trống ở production | UI hỏng khi đổi ngôn ngữ | Thiết kế | `vi: Record<Key, string>`: thiếu khóa là **lỗi biên dịch** |
+| 36 | Lỗi server hiển thị tiếng Anh dù UI là tiếng Việt | Trải nghiệm lẫn lộn | Review | Dịch theo `code` ổn định, fallback về `detail` của server |
+| 37 | Nâng cấp từ DB đang có dữ liệu (không phải DB trắng) | Migration V2 lỗi trên dữ liệu thật | Chạy thật trên DB demo đang chạy | Cột mới nullable / có mặc định; bản ghi cũ vẫn hiển thị |
+
 ## Rủi ro đã biết (chấp nhận có chủ đích – xem README)
 
 - Token vẫn hợp lệ tới hết TTL sau khi **đổi mật khẩu / hạ quyền admin** (khóa tài khoản thì đã chặn ở thao tác đặt phòng). Giảm thiểu: TTL mặc định 60’. Hướng tiếp theo: `token_version` hoặc refresh token.

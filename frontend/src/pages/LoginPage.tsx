@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { CalendarCheck, Eye, EyeOff } from 'lucide-react';
-import { ApiError } from '../api/client';
 import { useAuth } from '../lib/auth';
+import { LanguageSwitch, useI18n } from '../lib/i18n';
 import { Banner, Button, Field, Spinner } from '../components/ui';
 
 export function LoginPage() {
   const { user, loading, login } = useAuth();
+  const { t, err } = useI18n();
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,36 +27,35 @@ export function LoginPage() {
     setBusy(true);
     try {
       await login(email.trim(), password);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'INVALID_CREDENTIALS') setError('Incorrect email or password.');
-      else if (err instanceof ApiError && err.code === 'TOO_MANY_ATTEMPTS') setError('Too many failed attempts. Please wait a few minutes and try again.');
-      else setError(err instanceof ApiError ? err.message : 'Could not sign in. Please try again.');
+    } catch (e2) {
+      setError(err(e2));
       setBusy(false);
     }
   }
 
   return (
     <div className="center-screen">
+      <div className="login-lang"><LanguageSwitch /></div>
       <form className="card login" onSubmit={submit} noValidate>
         <div className="login-brand"><span className="brand-mark big" aria-hidden><CalendarCheck size={26} /></span></div>
-        <h1>Sign in</h1>
-        <p className="muted">Book meeting rooms without the back-and-forth.</p>
+        <h1>{t('login.title')}</h1>
+        <p className="muted">{t('login.subtitle')}</p>
         {error && <Banner tone="danger">{error}</Banner>}
-        <Field label="Email" error={touched && !email.trim() ? 'Enter your email' : undefined}>
-          <input type="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com" />
+        <Field label={t('login.email')} error={touched && !email.trim() ? t('login.enterEmail') : undefined}>
+          <input type="email" autoComplete="username" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('login.emailPh')} />
         </Field>
-        <Field label="Password" error={touched && !password ? 'Enter your password' : undefined}>
+        <Field label={t('login.password')} error={touched && !password ? t('login.enterPassword') : undefined}>
           <div className="input-group">
             <input type={show ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button type="button" className="icon-btn" aria-label={show ? 'Hide password' : 'Show password'} onClick={() => setShow((s) => !s)}>
+            <button type="button" className="icon-btn" aria-label={show ? t('login.hide') : t('login.show')} onClick={() => setShow((s) => !s)}>
               {show ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </Field>
-        <Button variant="primary" type="submit" loading={busy} className="block">Sign in</Button>
+        <Button variant="primary" type="submit" loading={busy} className="block">{t('login.submit')}</Button>
         {import.meta.env.VITE_DEMO_HINT === 'true' && (
           <p className="demo-hint small muted">
-            Demo: <code>admin@company.local</code> / <code>Admin12345!</code> · <code>alice@company.local</code> / <code>Password123!</code>
+            {t('login.demo')} <code>admin@company.local</code> / <code>Admin12345!</code> · <code>alice@company.local</code> / <code>Password123!</code>
           </p>
         )}
       </form>

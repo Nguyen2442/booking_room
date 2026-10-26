@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, DoorOpen, Plus, Wrench } from 'lucide-react';
 import { useConfig, useDaySchedule } from '../api/hooks';
 import type { Booking } from '../api/types';
 import { BookingDialog, type BookingDraft } from '../components/BookingDialog';
 import { BookingDetailDialog } from '../components/BookingDetailDialog';
 import { Button, EmptyState, ErrorState, PageHeader, Skeleton } from '../components/ui';
 import { useAuth } from '../lib/auth';
+import { useI18n } from '../lib/i18n';
 import { addDays, formatDate, fromMinutes, nowMinutesIn, todayIn, toMinutes, wallTime } from '../lib/time';
 import { useToast } from '../lib/toast';
-import { DoorOpen } from 'lucide-react';
 
 const MIN_HOUR_W = 84; // px per hour; below this the grid scrolls horizontally
 const LABEL_W = 168;
@@ -16,6 +16,7 @@ const LABEL_W = 168;
 export function SchedulePage() {
   const cfg = useConfig().data!;
   const { user } = useAuth();
+  const { t } = useI18n();
   const toast = useToast();
   const today = todayIn(cfg.timezone);
   const [date, setDate] = useState(today);
@@ -26,6 +27,7 @@ export function SchedulePage() {
   const ws = toMinutes(cfg.workdayStart);
   const we = toMinutes(cfg.workdayEnd);
   const hours = useMemo(() => Array.from({ length: Math.ceil((we - ws) / 60) }, (_, i) => ws + i * 60), [ws, we]);
+
   // Fill the available width on large screens (so titles are readable), scroll on small ones.
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
   const [hourW, setHourW] = useState(MIN_HOUR_W);
@@ -56,7 +58,7 @@ export function SchedulePage() {
 
   function openCreate(roomId: string, startMin?: number) {
     if (isPast || (isToday && startMin !== undefined && startMin + cfg.slotMinutes <= nowMin)) {
-      toast.info('That time has already passed.');
+      toast.info(t('schedule.passed'));
       return;
     }
     let s = startMin ?? ws;
@@ -75,17 +77,17 @@ export function SchedulePage() {
   return (
     <>
       <PageHeader
-        title="Schedule"
+        title={t('schedule.title')}
         subtitle={formatDate(date)}
         actions={
           <>
-            <div className="date-nav" role="group" aria-label="Choose day">
-              <Button variant="ghost" aria-label="Previous day" disabled={date <= today} icon={<ChevronLeft size={18} />} onClick={() => setDate(addDays(date, -1))} />
-              <input type="date" aria-label="Date" value={date} min={today} max={maxDate} onChange={(e) => e.target.value && setDate(e.target.value)} />
-              <Button variant="ghost" aria-label="Next day" disabled={date >= maxDate} icon={<ChevronRight size={18} />} onClick={() => setDate(addDays(date, 1))} />
-              <Button variant="secondary" disabled={isToday} onClick={() => setDate(today)}>Today</Button>
+            <div className="date-nav" role="group" aria-label={t('schedule.chooseDay')}>
+              <Button variant="ghost" aria-label={t('schedule.prevDay')} disabled={date <= today} icon={<ChevronLeft size={18} />} onClick={() => setDate(addDays(date, -1))} />
+              <input type="date" aria-label={t('common.date')} value={date} min={today} max={maxDate} onChange={(e) => e.target.value && setDate(e.target.value)} />
+              <Button variant="ghost" aria-label={t('schedule.nextDay')} disabled={date >= maxDate} icon={<ChevronRight size={18} />} onClick={() => setDate(addDays(date, 1))} />
+              <Button variant="secondary" disabled={isToday} onClick={() => setDate(today)}>{t('common.today')}</Button>
             </div>
-            <Button variant="primary" icon={<Plus size={18} />} onClick={() => setDraft({ date })}>New booking</Button>
+            <Button variant="primary" icon={<Plus size={18} />} onClick={() => setDraft({ date })}>{t('schedule.new')}</Button>
           </>
         }
       />
@@ -95,18 +97,19 @@ export function SchedulePage() {
         <div className="card stack">{Array.from({ length: 6 }, (_, i) => <Skeleton key={i} h={44} />)}</div>
       )}
       {schedule.data && schedule.data.rooms.length === 0 && (
-        <EmptyState icon={<DoorOpen size={28} />} title="No rooms yet">An administrator needs to add meeting rooms first.</EmptyState>
+        <EmptyState icon={<DoorOpen size={28} />} title={t('schedule.noRooms')}>{t('schedule.noRoomsHelp')}</EmptyState>
       )}
 
       {schedule.data && schedule.data.rooms.length > 0 && (
         <>
           <div className="legend" aria-hidden>
-            <span><i className="dot mine" /> Your bookings</span>
-            <span><i className="dot other" /> Booked by others</span>
-            <span><i className="dot past" /> Past</span>
-            <span className="muted">Click an empty area to book</span>
+            <span><i className="dot mine" /> {t('schedule.legendMine')}</span>
+            <span><i className="dot other" /> {t('schedule.legendOther')}</span>
+            <span><i className="dot block" /> {t('schedule.legendBlocked')}</span>
+            <span><i className="dot past" /> {t('schedule.legendPast')}</span>
+            <span className="muted">{t('schedule.hint')}</span>
           </div>
-          <div ref={setScroller} className="timeline card" role="region" aria-label="Room schedule" tabIndex={0}>
+          <div ref={setScroller} className="timeline card" role="region" aria-label={t('schedule.region')} tabIndex={0}>
             <div className="tl-inner" style={{ gridTemplateColumns: `${LABEL_W}px ${width}px` }}>
               <div className="tl-corner" />
               <div className="tl-hours" style={{ width }}>
@@ -119,32 +122,35 @@ export function SchedulePage() {
                 <div key={room.id} className="tl-row">
                   <div className="tl-room">
                     <span className="tl-room-name" title={room.name}>{room.name}</span>
-                    <button className="icon-btn" aria-label={`Book ${room.name}`} onClick={() => openCreate(room.id)}><Plus size={16} /></button>
+                    <button className="icon-btn" aria-label={t('schedule.bookRoom', { room: room.name })} onClick={() => openCreate(room.id)}><Plus size={16} /></button>
                   </div>
                   <div
                     className="tl-track"
                     style={{ width, backgroundSize: `${hourW}px 100%` }}
                     onClick={(e) => rowClick(e, room.id)}
                     role="group"
-                    aria-label={`${room.name}: ${bookings.length} bookings`}
+                    aria-label={t('schedule.roomCount', { room: room.name, n: bookings.length })}
                   >
                     {pastWidth > 0 && <div className="tl-past" style={{ width: pastWidth }} />}
                     {isToday && nowMin >= ws && nowMin <= we && <div className="tl-now" style={{ left: x(nowMin) }} aria-hidden />}
                     {bookings.map((b) => {
-                      const s = toMinutes(wallTime(b.startTime));
-                      const e = toMinutes(wallTime(b.endTime));
+                      // blocks can span several days: clamp to this day's working window
+                      const s = Math.max(ws, b.startTime.slice(0, 10) < date ? ws : toMinutes(wallTime(b.startTime)));
+                      const e = Math.min(we, b.endTime.slice(0, 10) > date ? we : toMinutes(wallTime(b.endTime)));
+                      if (e <= s) return null;
+                      const block = b.kind === 'BLOCK';
                       const mine = b.booker.id === user?.id;
                       return (
                         <button
                           key={b.id}
-                          className={`tl-booking ${mine ? 'mine' : 'other'}`}
+                          className={`tl-booking ${block ? 'block' : mine ? 'mine' : 'other'}`}
                           style={{ left: x(s) + 1, width: Math.max(x(e) - x(s) - 2, 8) }}
                           onClick={() => setSelected(b)}
                           title={`${b.title} · ${wallTime(b.startTime)}–${wallTime(b.endTime)} · ${b.booker.fullName}`}
-                          aria-label={`${b.title}, ${wallTime(b.startTime)} to ${wallTime(b.endTime)}, ${b.booker.fullName}`}
+                          aria-label={`${b.title}, ${wallTime(b.startTime)} - ${wallTime(b.endTime)}, ${b.booker.fullName}`}
                         >
-                          <span className="tl-b-title">{b.title}</span>
-                          <span className="tl-b-sub">{wallTime(b.startTime)}–{wallTime(b.endTime)} · {b.booker.fullName}</span>
+                          <span className="tl-b-title">{block && <Wrench size={12} aria-hidden />} {b.title}</span>
+                          <span className="tl-b-sub">{wallTime(b.startTime)}–{wallTime(b.endTime)}{block ? '' : ` · ${b.booker.fullName}`}</span>
                         </button>
                       );
                     })}

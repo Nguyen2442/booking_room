@@ -1,5 +1,7 @@
 export type Role = 'USER' | 'ADMIN';
 export type BookingStatus = 'CONFIRMED' | 'CANCELLED';
+export type BookingKind = 'BOOKING' | 'BLOCK';
+export type Frequency = 'WEEKLY' | 'BIWEEKLY' | 'WEEKDAYS';
 
 export interface User {
   id: string;
@@ -36,6 +38,9 @@ export interface RoomRef {
 
 export interface Booking {
   id: string;
+  kind: BookingKind;
+  attendees?: number;
+  seriesId?: string;
   room: RoomRef;
   booker: { id: string; fullName: string };
   title: string;
@@ -84,4 +89,23 @@ export interface RoomSchedule {
 export interface DaySchedule {
   date: string;
   rooms: RoomSchedule[];
+}
+
+export interface SeriesResponse {
+  seriesId: string;
+  created: Booking[];
+  skipped: { date: string; reason: string }[];
+}
+
+export interface BlockResult {
+  block: Booking;
+  cancelledBookings: Booking[];
+}
+
+export interface BlockConflict {
+  id: string;
+  title: string;
+  booker: string;
+  startTime: string;
+  endTime: string;
 }

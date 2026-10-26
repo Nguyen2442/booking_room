@@ -1,23 +1,26 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarX, Ticket } from 'lucide-react';
+import { CalendarX, Repeat, Ticket } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Booking, Page } from '../api/types';
 import { BookingDetailDialog, bookingPermissions } from '../components/BookingDetailDialog';
 import { Badge, Button, EmptyState, ErrorState, PageHeader, Pagination, Skeleton } from '../components/ui';
 import { useAuth } from '../lib/auth';
-import { durationLabel, formatDate, toMinutes, wallDate, wallTime } from '../lib/time';
-import { Link } from 'react-router-dom';
+import { useI18n } from '../lib/i18n';
+import type { Key } from '../lib/messages';
+import { formatDate, toMinutes, wallDate, wallTime } from '../lib/time';
 
 type Tab = 'upcoming' | 'past' | 'cancelled';
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'upcoming', label: 'Upcoming' },
-  { id: 'past', label: 'Past' },
-  { id: 'cancelled', label: 'Cancelled' },
+const TABS: { id: Tab; label: Key; empty: Key }[] = [
+  { id: 'upcoming', label: 'my.upcoming', empty: 'my.emptyUpcoming' },
+  { id: 'past', label: 'my.past', empty: 'my.emptyPast' },
+  { id: 'cancelled', label: 'my.cancelled', empty: 'my.emptyCancelled' },
 ];
 
 export function MyBookingsPage() {
   const { user } = useAuth();
+  const { t, dur } = useI18n();
   const [tab, setTab] = useState<Tab>('upcoming');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Booking | null>(null);
@@ -33,14 +36,15 @@ export function MyBookingsPage() {
     },
     placeholderData: (prev) => prev,
   });
+  const current = TABS.find((x) => x.id === tab)!;
 
   return (
     <>
-      <PageHeader title="My bookings" actions={<Link className="btn btn-primary" to="/">Book a room</Link>} />
+      <PageHeader title={t('my.title')} actions={<Link className="btn btn-primary" to="/">{t('my.book')}</Link>} />
       <div className="tabs" role="tablist">
-        {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} className={`tab ${tab === t.id ? 'active' : ''}`} onClick={() => { setTab(t.id); setPage(0); }}>
-            {t.label}
+        {TABS.map((x) => (
+          <button key={x.id} role="tab" aria-selected={tab === x.id} className={`tab ${tab === x.id ? 'active' : ''}`} onClick={() => { setTab(x.id); setPage(0); }}>
+            {t(x.label)}
           </button>
         ))}
       </div>
@@ -48,8 +52,8 @@ export function MyBookingsPage() {
       {q.isPending && <div className="stack">{Array.from({ length: 3 }, (_, i) => <div key={i} className="card"><Skeleton h={18} w="40%" /><Skeleton h={14} w="60%" /></div>)}</div>}
       {q.isError && <ErrorState error={q.error} onRetry={() => q.refetch()} />}
       {q.data && q.data.content.length === 0 && (
-        <EmptyState icon={tab === 'cancelled' ? <CalendarX size={28} /> : <Ticket size={28} />} title={`No ${tab} bookings`}>
-          {tab === 'upcoming' ? 'Book a room from the schedule and it will show up here.' : 'Nothing to show here.'}
+        <EmptyState icon={tab === 'cancelled' ? <CalendarX size={28} /> : <Ticket size={28} />} title={t(current.empty)}>
+          {tab === 'upcoming' ? t('my.emptyHelpUpcoming') : t('my.emptyHelpOther')}
         </EmptyState>
       )}
       {q.data && q.data.content.length > 0 && (
@@ -64,13 +68,18 @@ export function MyBookingsPage() {
                   <strong>{Number(wallDate(b.startTime).slice(8, 10))}</strong>
                 </div>
                 <div className="booking-main">
-                  <div className="booking-title">{b.title} {b.status === 'CANCELLED' && <Badge tone="danger">Cancelled</Badge>}</div>
+                  <div className="booking-title">
+                    {b.title}
+                    {b.seriesId && <Badge tone="accent"><Repeat size={12} aria-hidden /> {t('rec.badge')}</Badge>}
+                    {b.status === 'CANCELLED' && <Badge tone="danger">{t('dt.cancelled')}</Badge>}
+                  </div>
                   <div className="muted small">
-                    {formatDate(wallDate(b.startTime), { weekday: 'short', day: 'numeric', month: 'short' })} · {wallTime(b.startTime)}–{wallTime(b.endTime)} ({durationLabel(mins)}) · {b.room.name}
+                    {formatDate(wallDate(b.startTime), { weekday: 'short', day: 'numeric', month: 'short' })} · {wallTime(b.startTime)}–{wallTime(b.endTime)} ({dur(mins)}) · {b.room.name}
+                    {b.attendees ? ` · ${t('my.people', { n: b.attendees })}` : ''}
                   </div>
                 </div>
                 <div className="booking-actions">
-                  <Button variant="secondary" onClick={() => setSelected(b)}>{canCancel ? 'Manage' : 'Details'}</Button>
+                  <Button variant="secondary" onClick={() => setSelected(b)}>{canCancel ? t('my.manage') : t('my.details')}</Button>
                 </div>
               </li>
             );

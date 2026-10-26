@@ -1,9 +1,10 @@
 import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
-import { errorMessage } from '../api/client';
+import { useI18n } from '../lib/i18n';
 
 export function Spinner({ size = 18 }: { size?: number }) {
-  return <Loader2 size={size} className="spin" aria-label="Loading" />;
+  const { t } = useI18n();
+  return <Loader2 size={size} className="spin" aria-label={t('common.loading')} />;
 }
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -83,12 +84,13 @@ export function EmptyState({ icon, title, children }: { icon?: ReactNode; title:
 }
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  const { t, err } = useI18n();
   return (
     <div className="empty" role="alert">
       <div className="empty-icon danger"><AlertTriangle size={28} /></div>
-      <h3>Could not load data</h3>
-      <p>{errorMessage(error)}</p>
-      {onRetry && <Button onClick={onRetry}>Try again</Button>}
+      <h3>{t('common.couldNotLoad')}</h3>
+      <p>{err(error)}</p>
+      {onRetry && <Button onClick={onRetry}>{t('common.tryAgain')}</Button>}
     </div>
   );
 }
@@ -105,6 +107,7 @@ export function Banner({ tone, children }: { tone: 'danger' | 'warning' | 'info'
 export function Modal({
   open, onClose, title, children, footer, wide,
 }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
   // dialog.close() fires a native "close" event too; that one must not reach onClose, or closing a
   // dialog from code (e.g. swapping to a confirmation dialog) would also tell the parent "user dismissed it".
@@ -133,7 +136,7 @@ export function Modal({
         <div className="modal-card">
           <header className="modal-head">
             <h2>{title}</h2>
-            <button className="icon-btn" aria-label="Close" onClick={onClose}><X size={20} /></button>
+            <button className="icon-btn" aria-label={t('common.close')} onClick={onClose}><X size={20} /></button>
           </header>
           <div className="modal-body">{children}</div>
           {footer && <footer className="modal-foot">{footer}</footer>}
@@ -144,11 +147,12 @@ export function Modal({
 }
 
 export function ConfirmDialog({
-  open, title, message, confirmLabel = 'Confirm', danger, loading, onConfirm, onCancel, children,
+  open, title, message, confirmLabel, danger, loading, onConfirm, onCancel, children,
 }: {
   open: boolean; title: string; message?: ReactNode; confirmLabel?: string; danger?: boolean; loading?: boolean;
   onConfirm: () => void; onCancel: () => void; children?: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <Modal
       open={open}
@@ -156,8 +160,8 @@ export function ConfirmDialog({
       title={title}
       footer={
         <>
-          <Button variant="ghost" onClick={onCancel} disabled={loading}>Keep</Button>
-          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
+          <Button variant="ghost" onClick={onCancel} disabled={loading}>{t('common.keep')}</Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>{confirmLabel ?? t('common.confirm')}</Button>
         </>
       }
     >
@@ -168,13 +172,14 @@ export function ConfirmDialog({
 }
 
 export function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const { t } = useI18n();
   if (totalPages <= 1) return null;
   return (
-    <nav className="pagination" aria-label="Pagination">
-      <Button variant="ghost" icon={<ChevronLeft size={16} />} disabled={page === 0} onClick={() => onChange(page - 1)}>Previous</Button>
-      <span className="muted">Page {page + 1} of {totalPages}</span>
+    <nav className="pagination" aria-label={t('common.pagination')}>
+      <Button variant="ghost" icon={<ChevronLeft size={16} />} disabled={page === 0} onClick={() => onChange(page - 1)}>{t('common.previous')}</Button>
+      <span className="muted">{t('common.pageOf', { page: page + 1, total: totalPages })}</span>
       <Button variant="ghost" disabled={page >= totalPages - 1} onClick={() => onChange(page + 1)}>
-        Next <ChevronRight size={16} />
+        {t('common.next')} <ChevronRight size={16} />
       </Button>
     </nav>
   );

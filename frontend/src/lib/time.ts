@@ -46,9 +46,15 @@ export function addDays(date: string, n: number): string {
   return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
 }
 
+let dateLocale = 'en-GB';
+/** Set by the i18n provider so every formatted date follows the selected language. */
+export function setDateLocale(locale: string) {
+  dateLocale = locale;
+}
+
 export function formatDate(date: string, opts: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) {
   const [y, m, d] = date.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString('en-GB', { ...opts, timeZone: 'UTC' });
+  return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString(dateLocale, { ...opts, timeZone: 'UTC' });
 }
 
 /** API timestamps already carry the company offset, so wall time is just a slice. */
@@ -61,12 +67,22 @@ export const toMinutes = (hhmm: string) => {
 };
 export const fromMinutes = (n: number) => `${pad(Math.floor(n / 60))}:${pad(n % 60)}`;
 
-export function durationLabel(minutes: number) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h && m) return `${h}h ${m}m`;
-  return h ? `${h}h` : `${m}m`;
-}
-
 export const hasEnded = (iso: string) => Date.parse(iso) <= Date.now();
 export const hasStarted = (iso: string) => Date.parse(iso) <= Date.now();
+
+export const isWeekend = (date: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return dow === 0 || dow === 6;
+};
+
+/** Mirrors the server's series expansion so the form can preview the last date and the allowed count. */
+export function occurrenceDates(start: string, frequency: 'WEEKLY' | 'BIWEEKLY' | 'WEEKDAYS', count: number): string[] {
+  const out: string[] = [];
+  let d = start;
+  while (out.length < count) {
+    if (frequency !== 'WEEKDAYS' || !isWeekend(d)) out.push(d);
+    d = addDays(d, frequency === 'WEEKLY' ? 7 : frequency === 'BIWEEKLY' ? 14 : 1);
+  }
+  return out;
+}

@@ -50,6 +50,43 @@ Content-Type: application/json
   "roomId": "00000000-0000-0000-0000-000000000000",
   "title": "Planning",
   "description": "Quarterly planning",
+  "attendees": 6,
+  "startTime": "2030-01-15T10:00:00+07:00",
+  "endTime": "2030-01-15T11:00:00+07:00"
+}
+
+### Recurring booking: WEEKLY | BIWEEKLY | WEEKDAYS, 2..26 occurrences, onConflict FAIL (default) | SKIP
+POST {{api}}/bookings/series
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "roomId": "00000000-0000-0000-0000-000000000000",
+  "title": "Weekly sync",
+  "attendees": 6,
+  "startTime": "2030-01-15T10:00:00+07:00",
+  "endTime": "2030-01-15T11:00:00+07:00",
+  "frequency": "WEEKLY",
+  "occurrences": 4,
+  "onConflict": "SKIP"
+}
+
+### Cancel this and all following occurrences of a series
+POST {{api}}/bookings/00000000-0000-0000-0000-000000000000/cancel-series
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "reason": "project finished" }
+
+### Move a booking to another room (send a different roomId)
+PUT {{api}}/bookings/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "roomId": "00000000-0000-0000-0000-000000000001",
+  "title": "Planning",
+  "attendees": 6,
   "startTime": "2030-01-15T10:00:00+07:00",
   "endTime": "2030-01-15T11:00:00+07:00"
 }
@@ -81,6 +118,24 @@ Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 { "name": "Phoenix", "location": "Floor 5", "capacity": 12, "equipment": ["projector", "whiteboard"] }
+
+### Block a room (maintenance). 409 BLOCK_CONFLICTS_WITH_BOOKINGS lists the clashing bookings;
+### set cancelConflicting=true to cancel them and block anyway
+POST {{api}}/admin/blocks
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "roomId": "00000000-0000-0000-0000-000000000000",
+  "startTime": "2030-01-15T09:00:00+07:00",
+  "endTime": "2030-01-15T12:00:00+07:00",
+  "reason": "Projector repair",
+  "cancelConflicting": false
+}
+
+### Upcoming blocks
+GET {{api}}/bookings?kind=BLOCK&status=CONFIRMED
+Authorization: Bearer {{adminToken}}
 
 ### All bookings of the company
 GET {{api}}/bookings?status=CONFIRMED&size=50

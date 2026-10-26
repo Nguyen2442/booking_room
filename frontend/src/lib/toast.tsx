@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { CheckCircle2, Info, XCircle, X } from 'lucide-react';
+import { useI18n } from './i18n';
 
 type Tone = 'success' | 'error' | 'info';
 interface ToastItem { id: number; tone: Tone; text: string }
@@ -9,6 +10,7 @@ const Ctx = createContext<ToastApi | null>(null);
 let seq = 0;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t: tr } = useI18n();
   const [items, setItems] = useState<ToastItem[]>([]);
   const dismiss = (id: number) => setItems((l) => l.filter((x) => x.id !== id));
   const push = useCallback((tone: Tone, text: string) => {
@@ -31,7 +33,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div key={t.id} className={`toast toast-${t.tone}`}>
               <I size={18} aria-hidden />
               <span>{t.text}</span>
-              <button className="icon-btn" aria-label="Dismiss" onClick={() => dismiss(t.id)}><X size={16} /></button>
+              <button className="icon-btn" aria-label={tr('common.toastDismiss')} onClick={() => dismiss(t.id)}><X size={16} /></button>
             </div>
           );
         })}
