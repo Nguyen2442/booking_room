@@ -1,0 +1,167 @@
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
+import { errorMessage } from '../api/client';
+
+export function Spinner({ size = 18 }: { size?: number }) {
+  return <Loader2 size={size} className="spin" aria-label="Loading" />;
+}
+
+type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+  loading?: boolean;
+  icon?: ReactNode;
+};
+
+export function Button({ variant = 'secondary', loading, icon, children, disabled, className = '', ...rest }: BtnProps) {
+  return (
+    <button
+      type="button"
+      {...rest}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={`btn btn-${variant} ${className}`}
+    >
+      {loading ? <Spinner size={16} /> : icon}
+      {children}
+    </button>
+  );
+}
+
+export function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children: ReactNode }) {
+  return (
+    <label className={`field ${error ? 'has-error' : ''}`}>
+      <span className="field-label">{label}</span>
+      {children}
+      {hint && !error && <span className="field-hint">{hint}</span>}
+      {error && <span className="field-error" role="alert">{error}</span>}
+    </label>
+  );
+}
+
+export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'success' | 'danger' | 'warning' | 'accent'; children: ReactNode }) {
+  return <span className={`badge badge-${tone}`}>{children}</span>;
+}
+
+export function Chip({ children }: { children: ReactNode }) {
+  return <span className="chip">{children}</span>;
+}
+
+export function EmptyState({ icon, title, children }: { icon?: ReactNode; title: string; children?: ReactNode }) {
+  return (
+    <div className="empty">
+      {icon && <div className="empty-icon">{icon}</div>}
+      <h3>{title}</h3>
+      {children && <p>{children}</p>}
+    </div>
+  );
+}
+
+export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+  return (
+    <div className="empty" role="alert">
+      <div className="empty-icon danger"><AlertTriangle size={28} /></div>
+      <h3>Could not load data</h3>
+      <p>{errorMessage(error)}</p>
+      {onRetry && <Button onClick={onRetry}>Try again</Button>}
+    </div>
+  );
+}
+
+export function Skeleton({ h = 16, w = '100%' }: { h?: number; w?: number | string }) {
+  return <div className="skeleton" style={{ height: h, width: w }} aria-hidden />;
+}
+
+export function Banner({ tone, children }: { tone: 'danger' | 'warning' | 'info'; children: ReactNode }) {
+  return <div className={`banner banner-${tone}`} role={tone === 'danger' ? 'alert' : 'status'}>{children}</div>;
+}
+
+/** Native <dialog>: focus trapping, Escape to close and inert background come from the browser. */
+export function Modal({
+  open, onClose, title, children, footer, wide,
+}: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (open && !d.open) d.showModal();
+    if (!open && d.open) d.close();
+  }, [open]);
+  return (
+    <dialog
+      ref={ref}
+      className={`modal ${wide ? 'modal-wide' : ''}`}
+      onClose={onClose}
+      onMouseDown={(e) => { if (e.target === ref.current) onClose(); }}
+      aria-label={title}
+    >
+      {open && (
+        <div className="modal-card">
+          <header className="modal-head">
+            <h2>{title}</h2>
+            <button className="icon-btn" aria-label="Close" onClick={onClose}><X size={20} /></button>
+          </header>
+          <div className="modal-body">{children}</div>
+          {footer && <footer className="modal-foot">{footer}</footer>}
+        </div>
+      )}
+    </dialog>
+  );
+}
+
+export function ConfirmDialog({
+  open, title, message, confirmLabel = 'Confirm', danger, loading, onConfirm, onCancel, children,
+}: {
+  open: boolean; title: string; message?: ReactNode; confirmLabel?: string; danger?: boolean; loading?: boolean;
+  onConfirm: () => void; onCancel: () => void; children?: ReactNode;
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onCancel} disabled={loading}>Keep</Button>
+          <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>{confirmLabel}</Button>
+        </>
+      }
+    >
+      {message && <p className="muted">{message}</p>}
+      {children}
+    </Modal>
+  );
+}
+
+export function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <nav className="pagination" aria-label="Pagination">
+      <Button variant="ghost" icon={<ChevronLeft size={16} />} disabled={page === 0} onClick={() => onChange(page - 1)}>Previous</Button>
+      <span className="muted">Page {page + 1} of {totalPages}</span>
+      <Button variant="ghost" disabled={page >= totalPages - 1} onClick={() => onChange(page + 1)}>
+        Next <ChevronRight size={16} />
+      </Button>
+    </nav>
+  );
+}
+
+export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+  return (
+    <div className="page-head">
+      <div>
+        <h1>{title}</h1>
+        {subtitle && <p className="muted">{subtitle}</p>}
+      </div>
+      {actions && <div className="page-actions">{actions}</div>}
+    </div>
+  );
+}
+
+export function useDebounced<T>(value: T, ms = 300): T {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}

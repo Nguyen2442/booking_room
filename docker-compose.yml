@@ -43,5 +43,17 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_DEMO_HINT: ${DEMO_HINT:-true} # shows demo credentials on the login page; set false in production
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:80" # <- open this: http://localhost:3000
+    restart: unless-stopped
+
 volumes:
   pgdata:

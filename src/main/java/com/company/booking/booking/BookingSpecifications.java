@@ -13,7 +13,7 @@ public final class BookingSpecifications {
 
     /** Bookings overlapping [from, to) when either bound is given. */
     public static Specification<Booking> filter(
-            UUID roomId, UUID userId, BookingStatus status, Instant from, Instant to) {
+            UUID roomId, UUID userId, BookingStatus status, Instant from, Instant to, Instant endedBefore) {
         return (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             if (roomId != null) {
@@ -30,6 +30,9 @@ public final class BookingSpecifications {
             }
             if (to != null) {
                 p.add(cb.lessThan(root.get("startTime"), to));
+            }
+            if (endedBefore != null) {
+                p.add(cb.lessThanOrEqualTo(root.get("endTime"), endedBefore));
             }
             return cb.and(p.toArray(Predicate[]::new));
         };

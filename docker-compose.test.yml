@@ -1,5 +1,7 @@
 # Runs the whole test-suite against a real PostgreSQL:
 #   docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from tests
+# Separate project name: `down -v` here must never touch the real stack's containers/volumes.
+name: daoukiwoom-test
 services:
   db:
     image: postgres:16-alpine
@@ -20,9 +22,10 @@ services:
         condition: service_healthy
     environment:
       TEST_DB_URL: jdbc:postgresql://db:5432/booking_test
+      MAVEN_OPTS: -Xmx256m
     volumes:
       - .:/workspace
       - m2cache:/root/.m2
-    command: mvn -B test
+    command: mvn -B test -DargLine=-Xmx640m
 volumes:
   m2cache:

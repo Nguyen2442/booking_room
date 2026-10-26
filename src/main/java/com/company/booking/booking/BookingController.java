@@ -48,8 +48,9 @@ public class BookingController {
             @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) OffsetDateTime from,
             @RequestParam(required = false) OffsetDateTime to,
+            @RequestParam(required = false) OffsetDateTime endedBefore,
             @PageableDefault(sort = "startTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return service.search(null, user.id(), status, instant(from), instant(to), pageable);
+        return service.search(null, user.id(), status, instant(from), instant(to), instant(endedBefore), pageable);
     }
 
     @GetMapping
@@ -60,8 +61,9 @@ public class BookingController {
             @RequestParam(required = false) BookingStatus status,
             @RequestParam(required = false) OffsetDateTime from,
             @RequestParam(required = false) OffsetDateTime to,
+            @RequestParam(required = false) OffsetDateTime endedBefore,
             @PageableDefault(sort = "startTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return service.search(roomId, userId, status, instant(from), instant(to), pageable);
+        return service.search(roomId, userId, status, instant(from), instant(to), instant(endedBefore), pageable);
     }
 
     @GetMapping("/{id}")

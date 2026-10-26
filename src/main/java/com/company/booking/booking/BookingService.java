@@ -131,13 +131,13 @@ public class BookingService {
 
     @Transactional(readOnly = true)
     public PageResponse<BookingResponse> search(
-            UUID roomId, UUID userId, BookingStatus status, Instant from, Instant to, Pageable pageable) {
+            UUID roomId, UUID userId, BookingStatus status, Instant from, Instant to, Instant endedBefore, Pageable pageable) {
         SortGuard.check(pageable, SORTABLE);
         if (from != null && to != null && !to.isAfter(from)) {
             throw new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, "INVALID_RANGE", "'to' must be after 'from'");
         }
         return PageResponse.from(bookings.findAll(
-                BookingSpecifications.filter(roomId, userId, status, from, to), pageable).map(mapper::toResponse));
+                BookingSpecifications.filter(roomId, userId, status, from, to, endedBefore), pageable).map(mapper::toResponse));
     }
 
     private Booking load(UUID id) {

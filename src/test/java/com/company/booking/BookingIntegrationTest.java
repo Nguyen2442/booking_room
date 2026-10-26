@@ -176,6 +176,31 @@ class BookingIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
+    void endedBeforeSeparatesFinishedFromOngoingMeetings() throws Exception {
+        java.time.Instant now = java.time.Instant.now();
+        saveBooking(alice, now.minusSeconds(7200), now.minusSeconds(3600)); // finished
+        saveBooking(alice, now.minusSeconds(1800), now.plusSeconds(1800));  // in progress
+        create(alice, at(1, 10), at(1, 11));                                 // upcoming
+        mvc.perform(get("/api/v1/bookings/my").param("endedBefore", now.toString()).header("Authorization", bearer(alice)))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        mvc.perform(get("/api/v1/bookings/my").param("from", now.toString()).header("Authorization", bearer(alice)))
+                .andExpect(jsonPath("$.totalElements").value(2)); // in progress + upcoming
+    }
+
+    private void saveBooking(User who, java.time.Instant s, java.time.Instant e) {
+        var b = new com.company.booking.booking.Booking();
+        b.setRoom(room);
+        b.setUser(who);
+        b.setTitle("seeded");
+        b.setStartTime(s);
+        b.setEndTime(e);
+        bookingRepo.save(b);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    com.company.booking.booking.BookingRepository bookingRepo;
+
+    @Test
     void adminListsEverythingUsersCannot() throws Exception {
         create(alice, at(1, 10), at(1, 11));
         create(bob, at(1, 12), at(1, 13));
