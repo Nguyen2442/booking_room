@@ -114,3 +114,10 @@ Mã lỗi: 400 validation, 401, 403, 404, 409 `BOOKING_CONFLICT` / `ROOM_HAS_FUT
 - Tài khoản do ADMIN tạo (công ty nội bộ); tuỳ chọn tự đăng ký bị tắt.
 - Giờ làm việc và các giới hạn áp dụng chung mọi phòng, cấu hình được.
 - Booking không được xuyên ngày (bắt đầu và kết thúc cùng ngày theo múi giờ công ty).
+
+## 12. Thay đổi so với kế hoạch ban đầu (sau khi triển khai)
+- Thêm frontend React + Vite (nginx cùng origin, proxy `/api`); thêm `GET /api/v1/config` để UI đọc quy tắc đặt phòng.
+- Thêm tham số `endedBefore` cho `GET /bookings[/my]`; `GET /` của API chuyển tới Swagger UI.
+- Test chạy trên PostgreSQL thật qua `docker-compose.test.yml` (không dùng Testcontainers để chạy được cả khi không mount docker.sock).
+- Khóa user sẽ tự hủy booking tương lai; whitelist sort; throttle đăng nhập; cổng quản trị 8081 tách riêng.
+- Danh sách phát hiện/cải thiện trong quá trình tự review: `docs/04-review-log.md`.

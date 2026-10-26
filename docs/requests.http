@@ -1,0 +1,94 @@
+### Request collection for the VS Code "REST Client" / IntelliJ HTTP client.
+### Start the stack first:  docker compose up --build
+@host = http://localhost:8088
+@api = {{host}}/api/v1
+
+### 1. Login as a regular user (demo profile)
+# @name login
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "email": "alice@company.local", "password": "Password123!" }
+
+###
+@token = {{login.response.body.accessToken}}
+
+### Who am I
+GET {{api}}/auth/me
+Authorization: Bearer {{token}}
+
+### Booking rules the UI uses
+GET {{api}}/config
+Authorization: Bearer {{token}}
+
+### List rooms (filters: minCapacity, equipment, page, size, sort)
+GET {{api}}/rooms?minCapacity=8&equipment=projector&sort=capacity,desc
+Authorization: Bearer {{token}}
+
+### Day schedule for all rooms (company time zone date)
+GET {{api}}/schedule?date=2030-01-15
+Authorization: Bearer {{token}}
+
+### Schedule of one room (replace the id) - either ?date= or ?from=&to=
+GET {{api}}/rooms/00000000-0000-0000-0000-000000000000/schedule?date=2030-01-15
+Authorization: Bearer {{token}}
+
+### Find rooms free for a window (%2B is an encoded "+"; a trailing Z also works)
+GET {{api}}/rooms/available?start=2030-01-15T10:00:00%2B07:00&end=2030-01-15T11:00:00%2B07:00&minCapacity=6
+Authorization: Bearer {{token}}
+
+### Free gaps in a room for a day
+GET {{api}}/rooms/00000000-0000-0000-0000-000000000000/free-slots?date=2030-01-15&minDuration=60
+Authorization: Bearer {{token}}
+
+### Create a booking (409 BOOKING_CONFLICT if the slot is taken, 422 for rule violations)
+POST {{api}}/bookings
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "roomId": "00000000-0000-0000-0000-000000000000",
+  "title": "Planning",
+  "description": "Quarterly planning",
+  "startTime": "2030-01-15T10:00:00+07:00",
+  "endTime": "2030-01-15T11:00:00+07:00"
+}
+
+### My bookings (status, from, to, endedBefore, page, size, sort)
+GET {{api}}/bookings/my?status=CONFIRMED&sort=startTime,asc
+Authorization: Bearer {{token}}
+
+### Cancel a booking
+POST {{api}}/bookings/00000000-0000-0000-0000-000000000000/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "reason": "plans changed" }
+
+### ---------------- admin ----------------
+# @name adminLogin
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{ "email": "admin@company.local", "password": "Admin12345!" }
+
+###
+@adminToken = {{adminLogin.response.body.accessToken}}
+
+### Create a room
+POST {{api}}/rooms
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "name": "Phoenix", "location": "Floor 5", "capacity": 12, "equipment": ["projector", "whiteboard"] }
+
+### All bookings of the company
+GET {{api}}/bookings?status=CONFIRMED&size=50
+Authorization: Bearer {{adminToken}}
+
+### Create a user
+POST {{api}}/admin/users
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{ "email": "new.hire@company.local", "fullName": "New Hire", "password": "Welcome12345!", "role": "USER" }

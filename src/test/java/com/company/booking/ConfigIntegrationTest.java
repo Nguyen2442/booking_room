@@ -20,4 +20,10 @@ class ConfigIntegrationTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.slotMinutes").value(15));
         mvc.perform(get("/api/v1/config")).andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void apiRootRedirectsToSwaggerInsteadOfAnErrorBlob() throws Exception {
+        mvc.perform(get("/")).andExpect(status().isFound())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Location", "/swagger-ui.html"));
+    }
 }
