@@ -67,6 +67,9 @@ public class DemoDataSeeder implements ApplicationRunner {
         book(created.get(0), employees.get(1), tomorrow, 10, 12, "Sprint review");
         book(created.get(1), employees.get(2), tomorrow, 14, 15, "Design sync");
         book(created.get(2), employees.get(3), tomorrow, 9, 11, "1:1 interviews");
+        Booking confidential = book(created.get(7), employees.get(4), tomorrow, 16, 17, "Salary review");
+        confidential.setPrivateBooking(true);
+        bookings.save(confidential);
         log.info("Demo data seeded: {} rooms, {} users", created.size(), employees.size());
     }
 
@@ -88,7 +91,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         return u;
     }
 
-    private void book(Room room, User user, LocalDate day, int startHour, int endHour, String title) {
+    private Booking book(Room room, User user, LocalDate day, int startHour, int endHour, String title) {
         ZoneId zone = props.rules().timezone();
         Booking b = new Booking();
         b.setRoom(room);
@@ -97,6 +100,6 @@ public class DemoDataSeeder implements ApplicationRunner {
         b.setAttendees(Math.min(4, room.getCapacity()));
         b.setStartTime(day.atTime(startHour, 0).atZone(zone).toInstant());
         b.setEndTime(day.atTime(endHour, 0).atZone(zone).toInstant());
-        bookings.save(b);
+        return bookings.save(b);
     }
 }

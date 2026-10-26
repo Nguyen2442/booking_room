@@ -34,7 +34,7 @@ class BookingConcurrencyTest extends IntegrationTestBase {
             people.add(user("u" + i + "@company.local", Role.USER));
         }
         CreateBookingRequest req = new CreateBookingRequest(room.getId(), "Race", null,
-                OffsetDateTime.parse(at(1, 10)), OffsetDateTime.parse(at(1, 11)), 2);
+                OffsetDateTime.parse(at(1, 10)), OffsetDateTime.parse(at(1, 11)), 2, null);
 
         AtomicInteger ok = new AtomicInteger();
         AtomicInteger conflicts = new AtomicInteger();
@@ -74,7 +74,7 @@ class BookingConcurrencyTest extends IntegrationTestBase {
             int startMinutes = 8 * 60 + (i % 8) * 30;
             OffsetDateTime s = OffsetDateTime.parse(at(1, startMinutes / 60, startMinutes % 60));
             try {
-                service.create(u.getId(), new CreateBookingRequest(room.getId(), "x", null, s, s.plusHours(2), 2));
+                service.create(u.getId(), new CreateBookingRequest(room.getId(), "x", null, s, s.plusHours(2), 2, null));
             } catch (ApiException ignored) {
                 // conflicts are expected
             }
@@ -101,7 +101,7 @@ class BookingConcurrencyTest extends IntegrationTestBase {
                 int i = idx.getAndIncrement();
                 OffsetDateTime s = OffsetDateTime.parse(at(1, 8 + i));
                 try {
-                    service.create(u.getId(), new CreateBookingRequest(room.getId(), "x", null, s, s.plusHours(1), 2));
+                    service.create(u.getId(), new CreateBookingRequest(room.getId(), "x", null, s, s.plusHours(1), 2, null));
                 } catch (ApiException ignored) { }
                 return null;
             });

@@ -1,6 +1,7 @@
 package com.company.booking.booking;
 
 import com.company.booking.room.RoomDtos.RoomRef;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -21,7 +22,8 @@ public final class BookingDtos {
             @Size(max = 2000) String description,
             @NotNull OffsetDateTime startTime,
             @NotNull OffsetDateTime endTime,
-            @NotNull @Min(1) @Max(1000) Integer attendees) {}
+            @NotNull @Min(1) @Max(1000) Integer attendees,
+            @JsonProperty("private") Boolean privateMeeting) {}
 
     /** {@code roomId} is optional: send a different room to move the booking. */
     public record UpdateBookingRequest(
@@ -30,7 +32,8 @@ public final class BookingDtos {
             @Size(max = 2000) String description,
             @NotNull OffsetDateTime startTime,
             @NotNull OffsetDateTime endTime,
-            @NotNull @Min(1) @Max(1000) Integer attendees) {}
+            @NotNull @Min(1) @Max(1000) Integer attendees,
+            @JsonProperty("private") Boolean privateMeeting) {}
 
     public record CancelBookingRequest(@Size(max = 500) String reason) {}
 
@@ -59,7 +62,8 @@ public final class BookingDtos {
             @NotNull @Min(1) @Max(1000) Integer attendees,
             @NotNull Frequency frequency,
             @NotNull @Min(2) @Max(26) Integer occurrences,
-            ConflictPolicy onConflict) {}
+            ConflictPolicy onConflict,
+            @JsonProperty("private") Boolean privateMeeting) {}
 
     public record SkippedOccurrence(LocalDate date, String reason) {}
 
@@ -79,9 +83,13 @@ public final class BookingDtos {
     /** Deliberately no email: schedules are visible to every employee. */
     public record BookerRef(UUID id, String fullName) {}
 
+    /**
+     * When {@code masked} is true the viewer is not allowed to see the details of a private booking: booker,
+     * description, head-count, series, cancel reason and audit timestamps are omitted and the title is a placeholder.
+     */
     public record BookingResponse(
             UUID id, BookingKind kind, RoomRef room, BookerRef booker, String title, String description,
-            Integer attendees, UUID seriesId,
+            Integer attendees, UUID seriesId, @JsonProperty("private") boolean privateMeeting, boolean masked,
             OffsetDateTime startTime, OffsetDateTime endTime, BookingStatus status,
             OffsetDateTime cancelledAt, String cancelReason, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
 }

@@ -67,6 +67,10 @@ public class Booking {
     /** Expected head-count; null for blocks. */
     private Integer attendees;
 
+    /** Others only see "busy": see BookingMapper for exactly what is hidden. */
+    @Column(name = "private_booking", nullable = false)
+    private boolean privateBooking;
+
     @Column(name = "series_id", updatable = false)
     private UUID seriesId;
 

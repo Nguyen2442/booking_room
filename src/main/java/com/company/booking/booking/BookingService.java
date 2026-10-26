@@ -65,7 +65,8 @@ public class BookingService {
         if (bookings.existsConflict(room.getId(), w.start(), w.end())) {
             throw conflict();
         }
-        Booking b = newBooking(room, user, req.title(), req.description(), w, req.attendees(), null);
+        Booking b = newBooking(room, user, req.title(), req.description(), w, req.attendees(), null,
+                Boolean.TRUE.equals(req.privateMeeting()));
         return mapper.toResponse(saveOrConflict(b, room));
     }
 
@@ -117,7 +118,8 @@ public class BookingService {
         UUID seriesId = UUID.randomUUID();
         List<Booking> toSave = new ArrayList<>();
         for (int i : free) {
-            toSave.add(newBooking(room, user, req.title(), req.description(), windows.get(i), req.attendees(), seriesId));
+            toSave.add(newBooking(room, user, req.title(), req.description(), windows.get(i), req.attendees(), seriesId,
+                    Boolean.TRUE.equals(req.privateMeeting())));
         }
         List<Booking> saved;
         try {
@@ -159,6 +161,7 @@ public class BookingService {
         b.setTitle(req.title().trim());
         b.setDescription(req.description());
         b.setAttendees(req.attendees());
+        b.setPrivateBooking(Boolean.TRUE.equals(req.privateMeeting()));
         b.setStartTime(w.start());
         b.setEndTime(w.end());
         return mapper.toResponse(saveOrConflict(b, room));
@@ -247,7 +250,7 @@ public class BookingService {
     }
 
     private static Booking newBooking(Room room, User user, String title, String description, TimeWindow w,
-                                      int attendees, UUID seriesId) {
+                                      int attendees, UUID seriesId, boolean privateBooking) {
         Booking b = new Booking();
         b.setRoom(room);
         b.setUser(user);
@@ -255,6 +258,7 @@ public class BookingService {
         b.setDescription(description);
         b.setAttendees(attendees);
         b.setSeriesId(seriesId);
+        b.setPrivateBooking(privateBooking);
         b.setStartTime(w.start());
         b.setEndTime(w.end());
         return b;
