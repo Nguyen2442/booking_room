@@ -1,0 +1,45 @@
+# Run everything:  docker compose up --build
+# Demo data (10 rooms, sample users) is loaded because APP_PROFILE defaults to "demo".
+# For a real deployment: copy .env.example to .env, set real secrets and APP_PROFILE=prod.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: booking
+      POSTGRES_USER: ${DB_USER:-booking}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-booking}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d booking"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-demo}
+      DB_URL: jdbc:postgresql://db:5432/booking
+      DB_USER: ${DB_USER:-booking}
+      DB_PASSWORD: ${DB_PASSWORD:-booking}
+      # DEV DEFAULTS - override through .env in any shared/production environment
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@company.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin12345!}
+    ports:
+      - "8080:8080" # API + Swagger UI; the management port 8081 (health/metrics) is intentionally not published
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health/readiness | grep -q UP"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
