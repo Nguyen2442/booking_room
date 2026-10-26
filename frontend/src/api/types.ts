@@ -42,7 +42,11 @@ export interface Booking {
   attendees?: number;
   seriesId?: string;
   room: RoomRef;
-  booker: { id: string; fullName: string };
+  /** absent when the booking is private and the viewer may not see its details */
+  booker?: { id: string; fullName: string };
+  private?: boolean;
+  /** true when details were hidden for this viewer; `title` is then only a placeholder */
+  masked?: boolean;
   title: string;
   description?: string;
   /** ISO-8601 in the company time zone, e.g. 2026-10-27T10:00:00+07:00 */

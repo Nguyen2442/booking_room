@@ -108,3 +108,4 @@ Ký hiệu: **P0** bắt buộc · **P1** nên có · **P2** mở rộng.
 - [x] P0 Giao diện tiếng Anh (mặc định) và tiếng Việt, lưu lựa chọn, lỗi server dịch theo mã
 - [ ] Không làm (đã loại): SSO, email/thông báo, mời người tham dự/khách, mọi tích hợp dịch vụ ngoài
 - [ ] P2 Báo cáo sử dụng, audit log, no-show/check-in (chưa làm)
+- [x] P0 Họp riêng tư: che title/mô tả/người đặt/số người/chuỗi lặp ở server; chủ và admin thấy đủ; có test không rò rỉ

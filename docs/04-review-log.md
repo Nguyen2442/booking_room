@@ -56,9 +56,22 @@ do test tự động hay do chạy thử bằng trình duyệt thật.
 | 36 | Lỗi server hiển thị tiếng Anh dù UI là tiếng Việt | Trải nghiệm lẫn lộn | Review | Dịch theo `code` ổn định, fallback về `detail` của server |
 | 37 | Nâng cấp từ DB đang có dữ liệu (không phải DB trắng) | Migration V2 lỗi trên dữ liệu thật | Chạy thật trên DB demo đang chạy | Cột mới nullable / có mặc định; bản ghi cũ vẫn hiển thị |
 
+## Vòng bổ sung: họp riêng tư
+
+| # | Câu hỏi / bad case | Hậu quả nếu bỏ qua | Cách phát hiện | Cải thiện |
+|---|---|---|---|---|
+| 38 | Tiêu đề và mô tả booking có lộ cho mọi nhân viên không? | **Có**: lịch trả đủ title/description, bấm vào ô là xem được ("họp deal lương") | Người dùng hỏi, rồi kiểm tra API | Cờ `private`; che ở server, một chỗ (`BookingMapper`) |
+| 39 | Che ở UI cho nhanh? | Mở DevTools/gọi API vẫn đọc được | Review | Che ở API; e2e bắt **mọi response** gửi tới người xem và khẳng định không chứa nội dung bí mật |
+| 40 | Chỉ giấu tiêu đề thì tên người đặt vẫn lộ ("HR + Nam đặt 2 tiếng") | Suy ra nội dung | Review | Giấu luôn tên người đặt, số người, chuỗi lặp (`seriesId`), lý do hủy, mốc thời gian tạo/sửa |
+| 41 | Lỗi trùng lịch, tìm phòng, free-slots có kèm thông tin booking? | Rò rỉ qua đường phụ | Test | Test khẳng định các response đó không chứa title/mô tả/tên |
+| 42 | Không có người xem trong security context (gọi nội bộ)? | Mặc định lộ | Review | An toàn mặc định: **không xác định được người xem thì che** |
+| 43 | Người ngoài vẫn thấy nút "Thêm vào lịch" cho cuộc họp họ không đọc được | Thừa, gây hiểu nhầm | Ảnh chụp e2e | Ẩn nút khi `masked` |
+| 44 | Script e2e đổi mật khẩu rồi đổi lại: chờ toast cũ nên đóng trình duyệt trước khi request khôi phục chạy | Tài khoản demo bị đổi mật khẩu, về sau đăng nhập sai → throttle 429 | Chạy thật (429 bất thường sau khi restart) | Chờ đúng HTTP response + luôn khôi phục qua API admin ở cuối |
+
 ## Rủi ro đã biết (chấp nhận có chủ đích – xem README)
 
 - Token vẫn hợp lệ tới hết TTL sau khi **đổi mật khẩu / hạ quyền admin** (khóa tài khoản thì đã chặn ở thao tác đặt phòng). Giảm thiểu: TTL mặc định 60’. Hướng tiếp theo: `token_version` hoặc refresh token.
 - Throttle đăng nhập nằm trong bộ nhớ từng instance (N instance → giới hạn thực tế N×5). Hướng tiếp theo: giới hạn ở API gateway/Redis.
+- Họp riêng tư không giấu được việc phòng đang bận (cần cho chống trùng lịch), và admin xem được chi tiết (quyết định tin cậy có chủ đích; nếu cần admin cũng không xem, chỉ cần đổi điều kiện trong `BookingMapper.isMasked`).
 - Giới hạn "tối đa 50 booking tương lai/user" là giới hạn mềm (không chống được race hai request song song); **chống trùng lịch thì là bảo đảm cứng** ở DB.
 - Token JWT lưu `localStorage` (dễ bị XSS đánh cắp hơn cookie `HttpOnly`). Giảm thiểu: CSP nghiêm ngặt ở nginx, không render HTML từ người dùng. Hướng tiếp theo: cookie `HttpOnly` + CSRF token.

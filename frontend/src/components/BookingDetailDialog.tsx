@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { CalendarDays, CalendarPlus, Clock, DoorOpen, Pencil, Repeat, Users, User as UserIcon, Wrench, XCircle } from 'lucide-react';
+import { CalendarDays, CalendarPlus, Clock, DoorOpen, Lock, Pencil, Repeat, Users, User as UserIcon, Wrench, XCircle } from 'lucide-react';
 import { api } from '../api/client';
 import { useInvalidateBookings } from '../api/hooks';
 import type { Booking } from '../api/types';
@@ -16,7 +16,7 @@ import { Badge, Banner, Button, Field, Modal } from './ui';
 export function bookingPermissions(b: Booking, user: { id: string; role: string } | null) {
   const admin = user?.role === 'ADMIN';
   // room blocks are administrative: only admins act on them
-  const mine = !!user && (admin || (b.booker.id === user.id && b.kind === 'BOOKING'));
+  const mine = !!user && (admin || (b.booker?.id === user.id && b.kind === 'BOOKING'));
   const active = b.status === 'CONFIRMED' && !hasEnded(b.endTime);
   return {
     canCancel: mine && active,
@@ -38,6 +38,7 @@ export function BookingDetailDialog({ booking, onClose }: { booking: Booking | n
   const [error, setError] = useState('');
 
   const isBlock = booking?.kind === 'BLOCK';
+  const masked = !!booking?.masked;
 
   const cancel = useMutation({
     mutationFn: async () => {
@@ -76,9 +77,9 @@ export function BookingDetailDialog({ booking, onClose }: { booking: Booking | n
         onClose={onClose}
         title={isBlock ? t('dt.blocked') : t('dt.title')}
         footer={
-          (canEdit || canCancel || (live && !isBlock)) && (
+          (canEdit || canCancel || (live && !isBlock && !masked)) && (
             <>
-              {live && !isBlock && <Button variant="ghost" icon={<CalendarPlus size={16} />} onClick={() => downloadIcs(booking)}>{t('dt.addCal')}</Button>}
+              {live && !isBlock && !masked && <Button variant="ghost" icon={<CalendarPlus size={16} />} onClick={() => downloadIcs(booking)}>{t('dt.addCal')}</Button>}
               {canCancel && (
                 <Button variant="danger" icon={<XCircle size={16} />} onClick={() => { setError(''); setCancelling(true); }}>
                   {isBlock ? t('dt.liftBtn') : t('dt.cancelBtn')}
@@ -91,7 +92,11 @@ export function BookingDetailDialog({ booking, onClose }: { booking: Booking | n
       >
         <div className="detail">
           <div className="detail-title">
-            <h3>{isBlock && <Wrench size={18} aria-hidden className="inline-icon" />}{booking.title}</h3>
+            <h3>
+              {isBlock && <Wrench size={18} aria-hidden className="inline-icon" />}
+              {booking.private && <Lock size={17} aria-hidden className="inline-icon" />}
+              {masked ? t('priv.label') : booking.title}
+            </h3>
             <div className="quick">
               {booking.seriesId && <Badge tone="accent"><Repeat size={12} aria-hidden /> {t('rec.badge')}</Badge>}
               {booking.status === 'CANCELLED' ? <Badge tone="danger">{t('dt.cancelled')}</Badge>
@@ -103,9 +108,11 @@ export function BookingDetailDialog({ booking, onClose }: { booking: Booking | n
             <div><dt><DoorOpen size={16} aria-hidden /> {t('dt.room')}</dt><dd>{booking.room.name}</dd></div>
             <div><dt><CalendarDays size={16} aria-hidden /> {t('dt.date')}</dt><dd>{dateLabel}</dd></div>
             <div><dt><Clock size={16} aria-hidden /> {t('dt.time')}</dt><dd>{wallTime(booking.startTime)} – {wallTime(booking.endTime)} ({dur(mins)})</dd></div>
-            <div><dt><UserIcon size={16} aria-hidden /> {t('dt.bookedBy')}</dt><dd>{booking.booker.fullName}</dd></div>
-            {!isBlock && booking.attendees && <div><dt><Users size={16} aria-hidden /> {t('dt.attendees')}</dt><dd>{booking.attendees}</dd></div>}
+            {!masked && booking.booker && <div><dt><UserIcon size={16} aria-hidden /> {t('dt.bookedBy')}</dt><dd>{booking.booker.fullName}</dd></div>}
+            {!isBlock && !masked && booking.attendees && <div><dt><Users size={16} aria-hidden /> {t('dt.attendees')}</dt><dd>{booking.attendees}</dd></div>}
           </dl>
+          {masked && <Banner tone="info">{t('priv.maskedBody')}</Banner>}
+          {!masked && booking.private && <Banner tone="info">{t('priv.ownerNote')}</Banner>}
           {booking.description && <p className="detail-desc">{booking.description}</p>}
           {booking.status === 'CANCELLED' && (
             <Banner tone="info">{booking.cancelReason ? t('dt.cancelledReason', { reason: booking.cancelReason }) : t('dt.cancelledPlain')}</Banner>

@@ -51,9 +51,11 @@ Content-Type: application/json
   "title": "Planning",
   "description": "Quarterly planning",
   "attendees": 6,
+  "private": true,
   "startTime": "2030-01-15T10:00:00+07:00",
   "endTime": "2030-01-15T11:00:00+07:00"
 }
+# "private": true -> other employees only see that the room is busy (title "Private", no booker/description)
 
 ### Recurring booking: WEEKLY | BIWEEKLY | WEEKDAYS, 2..26 occurrences, onConflict FAIL (default) | SKIP
 POST {{api}}/bookings/series

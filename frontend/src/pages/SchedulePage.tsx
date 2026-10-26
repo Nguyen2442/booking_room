@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, DoorOpen, Plus, Wrench } from 'lucide-react';
+import { ChevronLeft, ChevronRight, DoorOpen, Lock, Plus, Wrench } from 'lucide-react';
 import { useConfig, useDaySchedule } from '../api/hooks';
 import type { Booking } from '../api/types';
 import { BookingDialog, type BookingDraft } from '../components/BookingDialog';
@@ -105,6 +105,7 @@ export function SchedulePage() {
           <div className="legend" aria-hidden>
             <span><i className="dot mine" /> {t('schedule.legendMine')}</span>
             <span><i className="dot other" /> {t('schedule.legendOther')}</span>
+            <span><i className="dot masked" /> {t('priv.label')}</span>
             <span><i className="dot block" /> {t('schedule.legendBlocked')}</span>
             <span><i className="dot past" /> {t('schedule.legendPast')}</span>
             <span className="muted">{t('schedule.hint')}</span>
@@ -139,18 +140,19 @@ export function SchedulePage() {
                       const e = Math.min(we, b.endTime.slice(0, 10) > date ? we : toMinutes(wallTime(b.endTime)));
                       if (e <= s) return null;
                       const block = b.kind === 'BLOCK';
-                      const mine = b.booker.id === user?.id;
+                      const mine = b.booker?.id === user?.id;
+                      const label = b.masked ? t('priv.label') : b.title;
                       return (
                         <button
                           key={b.id}
-                          className={`tl-booking ${block ? 'block' : mine ? 'mine' : 'other'}`}
+                          className={`tl-booking ${block ? 'block' : b.masked ? 'masked' : mine ? 'mine' : 'other'}`}
                           style={{ left: x(s) + 1, width: Math.max(x(e) - x(s) - 2, 8) }}
                           onClick={() => setSelected(b)}
-                          title={`${b.title} · ${wallTime(b.startTime)}–${wallTime(b.endTime)} · ${b.booker.fullName}`}
-                          aria-label={`${b.title}, ${wallTime(b.startTime)} - ${wallTime(b.endTime)}, ${b.booker.fullName}`}
+                          title={b.masked ? `${label} · ${wallTime(b.startTime)}–${wallTime(b.endTime)}` : `${b.title} · ${wallTime(b.startTime)}–${wallTime(b.endTime)} · ${b.booker?.fullName ?? ''}`}
+                          aria-label={`${label}, ${wallTime(b.startTime)} - ${wallTime(b.endTime)}${b.booker ? `, ${b.booker.fullName}` : ''}`}
                         >
-                          <span className="tl-b-title">{block && <Wrench size={12} aria-hidden />} {b.title}</span>
-                          <span className="tl-b-sub">{wallTime(b.startTime)}–{wallTime(b.endTime)}{block ? '' : ` · ${b.booker.fullName}`}</span>
+                          <span className="tl-b-title">{block && <Wrench size={12} aria-hidden />}{(b.masked || b.private) && <Lock size={12} aria-hidden />} {label}</span>
+                          <span className="tl-b-sub">{wallTime(b.startTime)}–{wallTime(b.endTime)}{block || !b.booker ? '' : ` · ${b.booker.fullName}`}</span>
                         </button>
                       );
                     })}

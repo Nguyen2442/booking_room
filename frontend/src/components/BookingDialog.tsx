@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { CalendarClock, Lightbulb, Repeat } from 'lucide-react';
+import { CalendarClock, Lightbulb, Lock, Repeat } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api/client';
 import { useConfig, useFreeSlots, useInvalidateBookings, useRoomDay, useRooms } from '../api/hooks';
@@ -84,6 +84,7 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
   const [title, setTitle] = useState(initial.title);
   const [description, setDescription] = useState(initial.description);
   const [attendees, setAttendees] = useState(initial.attendees);
+  const [isPrivate, setIsPrivate] = useState(editing?.private ?? false);
   const [repeat, setRepeat] = useState<RepeatMode>('NONE');
   const [occurrences, setOccurrences] = useState(4);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -157,6 +158,7 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
         startTime: zonedToIso(date, start, cfg.timezone),
         endTime: zonedToIso(date, end, cfg.timezone),
         attendees: attendeeCount,
+        private: isPrivate,
       };
       if (editing) return api<Booking>(`/bookings/${editing.id}`, { method: 'PUT', body: { ...base, roomId } });
       if (repeat !== 'NONE') {
@@ -303,10 +305,15 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} placeholder={t('bd.descPh')} />
       </Field>
 
+      <div className="field">
+        <label className="check"><input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} /> <Lock size={15} aria-hidden /> {t('priv.checkbox')}</label>
+        <span className="field-hint">{t('priv.hint')}</span>
+      </div>
+
       {inPast && <Banner tone="warning">{t('bd.pastWarn')}</Banner>}
       {!inPast && repeat === 'NONE' && busy.length > 0 && !serverError && (
         <Banner tone="warning">
-          {t('bd.busy', { room: selectedRoom?.name ?? '', list: busy.map((b) => `${wallTime(b.startTime)}–${wallTime(b.endTime)} (${b.booker.fullName})`).join(', ') })}
+          {t('bd.busy', { room: selectedRoom?.name ?? '', list: busy.map((b) => `${wallTime(b.startTime)}–${wallTime(b.endTime)} (${b.booker?.fullName ?? t('priv.label')})`).join(', ') })}
         </Banner>
       )}
       {!inPast && repeat === 'NONE' && busy.length === 0 && roomId && day.isSuccess && !serverError && (

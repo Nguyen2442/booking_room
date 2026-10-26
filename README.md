@@ -9,7 +9,7 @@ kể cả khi nhiều người đặt cùng lúc, và đủ chắc chắn để 
 | Database | PostgreSQL 16 (exclusion constraint chống trùng lịch) |
 | Frontend | React 18 + TypeScript + Vite, TanStack Query, phục vụ bởi nginx (proxy `/api`); giao diện **tiếng Anh (mặc định) / tiếng Việt** |
 | Chạy | Docker Compose (db + app + web) |
-| Test | JUnit 5 + MockMvc trên PostgreSQL thật, test đồng thời (92 test) + e2e giao diện bằng Playwright (`e2e/`) |
+| Test | JUnit 5 + MockMvc trên PostgreSQL thật, test đồng thời (101 test) + e2e giao diện bằng Playwright (`e2e/`) |
 
 ## 1. Chạy nhanh
 
@@ -60,7 +60,7 @@ cd frontend && npm install && npm run dev     # http://localhost:5173, proxy /ap
 ## 2. Tính năng
 
 **Nhân viên:** xem lịch tất cả phòng theo ngày (timeline, bấm vào ô trống để đặt) · tìm phòng trống theo ngày/giờ/số người/thiết bị ·
-đặt, sửa (kể cả **đổi sang phòng khác**), hủy booking của mình · nhập **số người tham dự** (không vượt sức chứa) ·
+đặt, sửa (kể cả **đổi sang phòng khác**), hủy booking của mình · nhập **số người tham dự** (không vượt sức chứa) · đánh dấu **họp riêng tư** (người khác chỉ thấy phòng đang bận) ·
 **đặt lịch lặp** (hằng tuần, 2 tuần/lần, các ngày làm việc; trùng thì báo ngày nào và cho chọn bỏ qua) · hủy một buổi hoặc "buổi này và các buổi sau" ·
 **thêm vào lịch (.ics)** · xem lịch sắp tới / đã qua / đã hủy · đổi mật khẩu ở trang Tài khoản.
 
@@ -193,6 +193,7 @@ curl -s "localhost:8080/api/v1/rooms/available?start=2030-01-15T10:00:00%2B07:00
 | **Chặn phòng (block) là một dòng trong bảng `bookings`** (`kind = BLOCK`), không phải bảng riêng | Cùng exclusion constraint bảo vệ block và booking khỏi nhau, nguyên tử và an toàn đồng thời, không thêm đường code mới. Block khóa phòng `FOR UPDATE` và hủy booking trùng *trước khi* chèn. |
 | Lịch lặp: tạo toàn bộ trong 1 transaction, mỗi buổi đều qua kiểm tra như booking đơn; `FAIL` (mặc định) hoặc `SKIP` | Không bao giờ để chuỗi tạo dở; người dùng biết chính xác ngày nào trùng. Chỉ hủy theo chuỗi, sửa từng buổi (đơn giản, dễ hiểu). |
 | `.ics` tạo ngay trên trình duyệt | Không cần server/email; dùng được với Google, Outlook, Apple. |
+| **Họp riêng tư: che dữ liệu ở server**, theo người xem, một chỗ duy nhất (`BookingMapper`); mặc định công khai | Che ở UI thì mở DevTools/gọi API vẫn đọc được. Người khác chỉ thấy phòng bận + khung giờ (bắt buộc để chống trùng): ẩn tiêu đề, mô tả, **tên người đặt**, số người, chuỗi lặp, lý do hủy. Chủ booking và **admin vẫn thấy đầy đủ** (admin cần hủy/quản lý; đây là quyết định tin cậy có chủ đích). Không xác định được người xem thì che. Có test kiểm tra không rò rỉ qua lịch ngày, lịch phòng, lỗi trùng lịch, tìm phòng, truy cập trực tiếp, lịch lặp. |
 | Khóa user → tự hủy booking tương lai của họ | Tránh "phòng ma" bị giữ bởi người đã nghỉ. |
 | JWT stateless (HS256, TTL 60’), BCrypt | Scale ngang không cần session; kiểm tra `active` từ DB ở thao tác ghi quan trọng. Đánh đổi: xem mục Rủi ro. |
 | Lỗi chuẩn RFC 7807 + `code` ổn định | Client xử lý theo `code`, không parse câu chữ. |
@@ -206,6 +207,7 @@ curl -s "localhost:8080/api/v1/rooms/available?start=2030-01-15T10:00:00%2B07:00
 
 - Mật khẩu BCrypt; mật khẩu > 72 byte bị từ chối thay vì cắt ngầm. Đăng nhập: cùng thông báo cho sai email/mật khẩu/tài khoản khóa, so khớp giả để cân bằng thời gian, khóa tạm sau 5 lần sai (theo IP+email).
 - Phân quyền: URL (`/admin/**`) + `@PreAuthorize`; USER chỉ thao tác booking của mình; lịch chung không lộ email.
+- **Họp riêng tư** (ví dụ thương lượng lương): tick "Họp riêng tư" khi đặt; người khác không đọc được tiêu đề/mô tả/tên người đặt qua bất kỳ API nào. Giới hạn: không thể giấu việc "phòng đang bận"; admin xem được chi tiết.
 - `X-Request-Id` được làm sạch (chống log injection); không trả stack trace; secret chỉ qua biến môi trường; container backend chạy bằng user không phải root.
 - **Rủi ro đã biết:** token còn hiệu lực tới hết TTL sau khi đổi mật khẩu/hạ quyền; throttle đăng nhập theo từng instance; token ở `localStorage`. Chi tiết và hướng nâng cấp: [docs/04-review-log.md](docs/04-review-log.md).
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ListChecks, Search, Wrench, X } from 'lucide-react';
+import { ListChecks, Lock, Search, Wrench, X } from 'lucide-react';
 import { api } from '../api/client';
 import { useConfig, useRooms } from '../api/hooks';
 import type { Booking, BookingKind, BookingStatus, Page, User } from '../api/types';
@@ -62,8 +62,8 @@ export function AdminBookingsPage() {
                 <tr key={b.id}>
                   <td><strong>{formatDate(wallDate(b.startTime), { weekday: 'short', day: 'numeric', month: 'short' })}</strong><div className="muted small">{wallTime(b.startTime)}–{wallTime(b.endTime)} ({dur(toMinutes(wallTime(b.endTime)) - toMinutes(wallTime(b.startTime)))})</div></td>
                   <td>{b.room.name}</td>
-                  <td>{b.kind === 'BLOCK' && <Wrench size={14} aria-hidden className="inline-icon" />}{b.title}</td>
-                  <td>{b.booker.fullName}</td>
+                  <td>{b.kind === 'BLOCK' && <Wrench size={14} aria-hidden className="inline-icon" />}{b.private && <Lock size={14} aria-hidden className="inline-icon" />}{b.title}</td>
+                  <td>{b.booker?.fullName}</td>
                   <td>{b.status === 'CANCELLED' ? <Badge tone="danger">{t('dt.cancelled')}</Badge> : b.kind === 'BLOCK' ? <Badge tone="warning">{t('ab.blockBadge')}</Badge> : <Badge tone="success">{t('ab.confirmed')}</Badge>}</td>
                   <td className="actions"><Button variant="ghost" onClick={() => setSelected(b)}>{t('ab.open')}</Button></td>
                 </tr>

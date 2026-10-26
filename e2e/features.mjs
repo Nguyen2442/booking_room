@@ -141,21 +141,23 @@ ok('booking moved Halong -> Sakura (capacity enforced on the new room)');
 // ---------- 5. account page: change password
 await p.goto(BASE + '/account');
 await p.waitForSelector('h1');
-await p.getByLabel('Current password', { exact: true }).fill('wrong-wrong');
-await p.getByLabel('New password', { exact: true }).fill('NewPassword123!');
-await p.getByLabel('Confirm new password', { exact: true }).fill('NewPassword123!');
-await p.getByRole('button', { name: 'Update password' }).click();
+const changePw = async (current, next) => {
+  await p.getByLabel('Current password', { exact: true }).fill(current);
+  await p.getByLabel('New password', { exact: true }).fill(next);
+  await p.getByLabel('Confirm new password', { exact: true }).fill(next);
+  // wait for the actual HTTP response: a toast from the previous change may still be on screen
+  const [res] = await Promise.all([
+    p.waitForResponse((r) => r.url().includes('/auth/change-password')),
+    p.getByRole('button', { name: 'Update password' }).click(),
+  ]);
+  return res.status();
+};
+if ((await changePw('wrong-wrong', 'NewPassword123!')) !== 422) throw new Error('wrong current password must be rejected');
 await p.getByText('The current password is incorrect.').waitFor();
-await p.getByLabel('Current password', { exact: true }).fill('Password123!');
-await p.getByRole('button', { name: 'Update password' }).click();
-await p.getByText('Password updated').waitFor();
+if ((await changePw('Password123!', 'NewPassword123!')) !== 204) throw new Error('password change failed');
 await p.screenshot({ path: out('26-account') });
 // restore the demo password so the demo accounts keep working
-await p.getByLabel('Current password', { exact: true }).fill('NewPassword123!');
-await p.getByLabel('New password', { exact: true }).fill('Password123!');
-await p.getByLabel('Confirm new password', { exact: true }).fill('Password123!');
-await p.getByRole('button', { name: 'Update password' }).click();
-await p.getByText('Password updated').waitFor();
+if ((await changePw('NewPassword123!', 'Password123!')) !== 204) throw new Error('could not restore the demo password');
 ok('change password (wrong current rejected, success, restored)');
 await alice.ctx.close();
 
@@ -215,6 +217,70 @@ await p.getByText('Block lifted').waitFor();
 ok('admin lifted the block');
 await admin.ctx.close();
 
+// ---------- 6b. private booking: others see only "busy"
+{
+  const D2 = addDays(today, 2);
+  const SECRET = 'E2E Salary talk', SECRET_DESC = 'E2E secret offer 5000';
+  const mekong = room('Mekong');
+  const al = await login('alice@company.local', 'Password123!');
+  await al.page.getByRole('button', { name: 'New booking' }).click();
+  let d = al.page.locator('dialog[open]');
+  await d.getByLabel('Title', { exact: true }).fill(SECRET);
+  await d.getByLabel('Room', { exact: true }).selectOption(mekong.id);
+  await d.getByLabel('Attendees', { exact: true }).fill('2');
+  await d.getByLabel('Date', { exact: true }).fill(D2);
+  await d.getByLabel('Starts', { exact: true }).selectOption('14:00');
+  await d.getByLabel('Ends', { exact: true }).selectOption('15:00');
+  await d.getByLabel('Description (optional)', { exact: true }).fill(SECRET_DESC);
+  await al.page.screenshot({ path: out('36-private-checkbox') });
+  await d.getByLabel('Private meeting').check();
+  await d.locator('button[type=submit]').click();
+  await al.page.getByText('Room booked').waitFor();
+  await al.page.getByLabel('Date', { exact: true }).fill(D2);
+  await al.page.locator('.tl-booking.mine', { hasText: SECRET }).waitFor();
+  ok('owner sees own private booking with the real title');
+  await al.ctx.close();
+
+  const bb = await login('bob@company.local', 'Password123!');
+  let leaked = [];
+  bb.page.on('response', async (r) => {
+    if (!r.url().includes('/api/')) return;
+    try { const t = await r.text(); if (t.includes('Salary') || t.includes('secret offer') || t.includes('"alice')) leaked.push(r.url()); } catch { /* body unavailable */ }
+  });
+  await bb.page.getByLabel('Date', { exact: true }).fill(D2);
+  await bb.page.locator('.tl-booking.masked').waitFor();
+  const html = await bb.page.content();
+  if (html.includes('Salary') || html.includes('secret offer')) throw new Error('secret text reached the DOM for another employee');
+  await bb.page.screenshot({ path: out('37-private-masked') });
+  await bb.page.locator('.tl-booking.masked').first().click();
+  await bb.page.getByText('The details of this meeting are private').waitFor();
+  await bb.page.screenshot({ path: out('38-private-detail') });
+  await bb.page.keyboard.press('Escape');
+  // the room is still busy: bob cannot take that slot
+  await bb.page.getByRole('button', { name: 'New booking' }).click();
+  d = bb.page.locator('dialog[open]');
+  await d.getByLabel('Title', { exact: true }).fill('E2E bob wants it');
+  await d.getByLabel('Room', { exact: true }).selectOption(mekong.id);
+  await d.getByLabel('Attendees', { exact: true }).fill('2');
+  await d.getByLabel('Date', { exact: true }).fill(D2);
+  await d.getByLabel('Starts', { exact: true }).selectOption('14:00');
+  await d.getByLabel('Ends', { exact: true }).selectOption('15:00');
+  await d.getByText(/is busy at that time: 14:00–15:00 \(Private\)/).waitFor();
+  ok('busy warning for another employee names no one: "(Private)"');
+  if (leaked.length) throw new Error('private data in API responses to bob: ' + leaked.join(', '));
+  ok('no API response to another employee contained the private title/description/owner');
+  await bb.ctx.close();
+
+  const ad = await login('admin@company.local', 'Admin12345!');
+  await ad.page.getByLabel('Date', { exact: true }).fill(D2);
+  await ad.page.locator('.tl-booking', { hasText: SECRET }).first().click();
+  await ad.page.getByText('This meeting is private: only its owner and administrators').waitFor();
+  await ad.page.getByText(SECRET_DESC).waitFor();
+  await ad.page.screenshot({ path: out('39-private-admin') });
+  ok('admin sees the full private booking');
+  await ad.ctx.close();
+}
+
 // ---------- 7. Vietnamese walkthrough screenshots
 const vi = await login('alice@company.local', 'Password123!');
 p = vi.page;
@@ -244,5 +310,11 @@ await m.page.screenshot({ path: out('35-mobile-vi') });
 await m.ctx.close();
 
 await browser.close();
+{
+  // whatever happened above, leave the demo account usable
+  const adm = await token('admin@company.local', 'Admin12345!');
+  const list = await (await api.get('/api/v1/admin/users?q=alice@company.local', { headers: H(adm) })).json();
+  await api.post(`/api/v1/admin/users/${list.content[0].id}/reset-password`, { headers: H(adm), data: { newPassword: 'Password123!' } });
+}
 sql("delete from bookings where title like 'E2E%' or title like 'Block E2E%'");
 console.log(errors.length ? 'CONSOLE ERRORS:\n' + errors.join('\n') : 'No unexpected console errors');

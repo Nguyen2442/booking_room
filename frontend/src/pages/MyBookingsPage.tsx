@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarX, Repeat, Ticket } from 'lucide-react';
+import { CalendarX, Lock, Repeat, Ticket } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Booking, Page } from '../api/types';
@@ -70,6 +70,7 @@ export function MyBookingsPage() {
                 <div className="booking-main">
                   <div className="booking-title">
                     {b.title}
+                    {b.private && <Badge><Lock size={12} aria-hidden /> {t('priv.label')}</Badge>}
                     {b.seriesId && <Badge tone="accent"><Repeat size={12} aria-hidden /> {t('rec.badge')}</Badge>}
                     {b.status === 'CANCELLED' && <Badge tone="danger">{t('dt.cancelled')}</Badge>}
                   </div>
