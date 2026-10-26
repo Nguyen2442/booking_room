@@ -1,5 +1,6 @@
 package com.company.booking.common;
 
+import java.util.Map;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
@@ -9,11 +10,24 @@ public class ApiException extends RuntimeException {
 
     private final HttpStatus status;
     private final String code;
+    /** Extra machine-readable details, e.g. the list of conflicting dates. */
+    private final Map<String, Object> properties;
 
     public ApiException(HttpStatus status, String code, String message) {
+        this(status, code, message, Map.of());
+    }
+
+    public ApiException(HttpStatus status, String code, String message, Map<String, Object> properties) {
         super(message);
         this.status = status;
         this.code = code;
+        this.properties = properties;
+    }
+
+    public ApiException with(String key, Object value) {
+        Map<String, Object> merged = new java.util.LinkedHashMap<>(properties);
+        merged.put(key, value);
+        return new ApiException(status, code, getMessage(), merged);
     }
 
     public static ApiException notFound(String code, String message) {

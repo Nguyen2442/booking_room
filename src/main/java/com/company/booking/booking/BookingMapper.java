@@ -26,9 +26,10 @@ public class BookingMapper {
     /** Must be called inside a transaction: touches lazy room/user associations. */
     public BookingResponse toResponse(Booking b) {
         return new BookingResponse(
-                b.getId(), RoomRef.from(b.getRoom()),
+                b.getId(), b.getKind(), RoomRef.from(b.getRoom()),
                 new BookerRef(b.getUser().getId(), b.getUser().getFullName()),
-                b.getTitle(), b.getDescription(), local(b.getStartTime()), local(b.getEndTime()),
+                b.getTitle(), b.getDescription(), b.getAttendees(), b.getSeriesId(),
+                local(b.getStartTime()), local(b.getEndTime()),
                 b.getStatus(), local(b.getCancelledAt()), b.getCancelReason(),
                 local(b.getCreatedAt()), local(b.getUpdatedAt()));
     }

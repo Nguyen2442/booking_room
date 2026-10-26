@@ -93,7 +93,7 @@ class BookingIntegrationTest extends IntegrationTestBase {
     @Test
     void unknownOrInactiveRoom() throws Exception {
         mvc.perform(withJson(post("/api/v1/bookings"), alice,
-                "{\"roomId\":\"" + java.util.UUID.randomUUID() + "\",\"title\":\"x\",\"startTime\":\"" + at(1, 10) + "\",\"endTime\":\"" + at(1, 11) + "\"}"))
+                "{\"roomId\":\"" + java.util.UUID.randomUUID() + "\",\"title\":\"x\",\"attendees\":2,\"startTime\":\"" + at(1, 10) + "\",\"endTime\":\"" + at(1, 11) + "\"}"))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("ROOM_NOT_FOUND"));
         room.setActive(false);
         rooms.save(room);
@@ -138,7 +138,7 @@ class BookingIntegrationTest extends IntegrationTestBase {
     }
 
     private String updateBody(String title, String start, String end) throws Exception {
-        return json.writeValueAsString(java.util.Map.of("title", title, "startTime", start, "endTime", end));
+        return json.writeValueAsString(java.util.Map.of("title", title, "startTime", start, "endTime", end, "attendees", 2));
     }
 
     @Test

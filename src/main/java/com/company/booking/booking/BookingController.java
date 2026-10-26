@@ -2,6 +2,9 @@ package com.company.booking.booking;
 
 import com.company.booking.booking.BookingDtos.BookingResponse;
 import com.company.booking.booking.BookingDtos.CancelBookingRequest;
+import com.company.booking.booking.BookingDtos.CancelSeriesResponse;
+import com.company.booking.booking.BookingDtos.CreateSeriesRequest;
+import com.company.booking.booking.BookingDtos.SeriesResponse;
 import com.company.booking.booking.BookingDtos.CreateBookingRequest;
 import com.company.booking.booking.BookingDtos.UpdateBookingRequest;
 import com.company.booking.common.PageResponse;
@@ -50,7 +53,7 @@ public class BookingController {
             @RequestParam(required = false) OffsetDateTime to,
             @RequestParam(required = false) OffsetDateTime endedBefore,
             @PageableDefault(sort = "startTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return service.search(null, user.id(), status, instant(from), instant(to), instant(endedBefore), pageable);
+        return service.search(null, user.id(), status, instant(from), instant(to), instant(endedBefore), BookingKind.BOOKING, pageable);
     }
 
     @GetMapping
@@ -62,8 +65,22 @@ public class BookingController {
             @RequestParam(required = false) OffsetDateTime from,
             @RequestParam(required = false) OffsetDateTime to,
             @RequestParam(required = false) OffsetDateTime endedBefore,
+            @RequestParam(required = false) BookingKind kind,
             @PageableDefault(sort = "startTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return service.search(roomId, userId, status, instant(from), instant(to), instant(endedBefore), pageable);
+        return service.search(roomId, userId, status, instant(from), instant(to), instant(endedBefore), kind, pageable);
+    }
+
+    @PostMapping("/series")
+    public ResponseEntity<SeriesResponse> createSeries(
+            @AuthenticationPrincipal AuthUser user, @Valid @RequestBody CreateSeriesRequest req) {
+        return ResponseEntity.status(201).body(service.createSeries(user.id(), req));
+    }
+
+    @PostMapping("/{id}/cancel-series")
+    public CancelSeriesResponse cancelSeries(
+            @AuthenticationPrincipal AuthUser user, @PathVariable UUID id,
+            @Valid @RequestBody(required = false) CancelBookingRequest req) {
+        return service.cancelSeries(user, id, req == null ? null : req.reason());
     }
 
     @GetMapping("/{id}")

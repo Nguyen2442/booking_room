@@ -22,10 +22,10 @@ services:
         condition: service_healthy
     environment:
       TEST_DB_URL: jdbc:postgresql://db:5432/booking_test
-      MAVEN_OPTS: -Xmx256m
+      MAVEN_OPTS: -Xmx160m -XX:+UseSerialGC
     volumes:
       - .:/workspace
       - m2cache:/root/.m2
-    command: mvn -B test -DargLine=-Xmx640m
+    command: mvn -B test "-DargLine=-Xmx420m -XX:+UseSerialGC -Xss512k"
 volumes:
   m2cache:

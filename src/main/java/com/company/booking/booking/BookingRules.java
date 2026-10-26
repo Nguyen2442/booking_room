@@ -72,4 +72,35 @@ public class BookingRules {
     private boolean aligned(ZonedDateTime t) {
         return t.getSecond() == 0 && t.getNano() == 0 && t.getMinute() % rules.slotMinutes() == 0;
     }
+
+    /**
+     * Admin holds are looser than bookings: they may span days and hours outside the working day
+     * (e.g. "closed all of next week"), but must still be aligned, ordered, not already over, and bounded.
+     */
+    public TimeWindow validateBlock(OffsetDateTime startIn, OffsetDateTime endIn) {
+        ZoneId zone = rules.timezone();
+        ZonedDateTime s = startIn.atZoneSameInstant(zone);
+        ZonedDateTime e = endIn.atZoneSameInstant(zone);
+        if (!e.isAfter(s)) {
+            throw ApiException.unprocessable("INVALID_TIME_RANGE", "endTime must be after startTime");
+        }
+        if (!aligned(s) || !aligned(e)) {
+            throw ApiException.unprocessable("TIME_NOT_ALIGNED",
+                    "Times must fall on " + rules.slotMinutes() + "-minute boundaries with zero seconds");
+        }
+        Instant now = clock.instant();
+        if (!e.toInstant().isAfter(now)) {
+            throw ApiException.unprocessable("IN_THE_PAST", "The block has already ended");
+        }
+        Instant horizon = now.plus(Duration.ofDays(rules.maxAdvanceDays()));
+        if (s.toInstant().isAfter(horizon)) {
+            throw ApiException.unprocessable("TOO_FAR_IN_ADVANCE",
+                    "Blocks can start at most " + rules.maxAdvanceDays() + " days ahead");
+        }
+        if (Duration.between(s, e).toDays() > rules.maxAdvanceDays()) {
+            throw ApiException.unprocessable("DURATION_TOO_LONG",
+                    "A block can last at most " + rules.maxAdvanceDays() + " days");
+        }
+        return new TimeWindow(s.toInstant(), e.toInstant());
+    }
 }

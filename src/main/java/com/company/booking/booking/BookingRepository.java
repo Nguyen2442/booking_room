@@ -39,12 +39,14 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     @Query("""
             select count(b) from Booking b
             where b.user.id = :userId and b.status = com.company.booking.booking.BookingStatus.CONFIRMED
+              and b.kind = com.company.booking.booking.BookingKind.BOOKING
               and b.endTime > :now""")
     long countActiveByUser(@Param("userId") UUID userId, @Param("now") Instant now);
 
     @Query("""
             select count(b) > 0 from Booking b
             where b.room.id = :roomId and b.status = com.company.booking.booking.BookingStatus.CONFIRMED
+              and b.kind = com.company.booking.booking.BookingKind.BOOKING
               and b.endTime > :now""")
     boolean existsFutureConfirmed(@Param("roomId") UUID roomId, @Param("now") Instant now);
 
@@ -69,7 +71,23 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
                 b.cancelledAt = :now, b.cancelledBy = :by, b.cancelReason = :reason,
                 b.updatedAt = :now, b.version = b.version + 1
             where b.user.id = :userId and b.status = com.company.booking.booking.BookingStatus.CONFIRMED
+              and b.kind = com.company.booking.booking.BookingKind.BOOKING
               and b.endTime > :now""")
     int cancelFutureByUser(@Param("userId") UUID userId, @Param("now") Instant now,
                            @Param("by") UUID by, @Param("reason") String reason);
+
+    @Query("""
+            select b from Booking b join fetch b.user join fetch b.room
+            where b.room.id = :roomId and b.status = com.company.booking.booking.BookingStatus.CONFIRMED
+              and b.startTime < :end and b.endTime > :start
+            order by b.startTime""")
+    List<Booking> findConfirmedOverlapping(@Param("roomId") UUID roomId, @Param("start") Instant start, @Param("end") Instant end);
+
+    /** Upcoming, still-active occurrences of a series from {@code from} onwards. */
+    @Query("""
+            select b from Booking b join fetch b.user join fetch b.room
+            where b.seriesId = :seriesId and b.status = com.company.booking.booking.BookingStatus.CONFIRMED
+              and b.startTime >= :from and b.endTime > :now
+            order by b.startTime""")
+    List<Booking> findActiveSeriesFrom(@Param("seriesId") UUID seriesId, @Param("from") Instant from, @Param("now") Instant now);
 }

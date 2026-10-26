@@ -94,6 +94,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         b.setRoom(room);
         b.setUser(user);
         b.setTitle(title);
+        b.setAttendees(Math.min(4, room.getCapacity()));
         b.setStartTime(day.atTime(startHour, 0).atZone(zone).toInstant());
         b.setEndTime(day.atTime(endHour, 0).atZone(zone).toInstant());
         bookings.save(b);

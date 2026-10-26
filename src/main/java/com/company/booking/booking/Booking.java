@@ -38,7 +38,7 @@ public class Booking {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "room_id", nullable = false, updatable = false)
+    @JoinColumn(name = "room_id", nullable = false)
     private Room room;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -59,6 +59,16 @@ public class Booking {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private BookingStatus status = BookingStatus.CONFIRMED;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    private BookingKind kind = BookingKind.BOOKING;
+
+    /** Expected head-count; null for blocks. */
+    private Integer attendees;
+
+    @Column(name = "series_id", updatable = false)
+    private UUID seriesId;
 
     @Column(name = "cancelled_at")
     private Instant cancelledAt;

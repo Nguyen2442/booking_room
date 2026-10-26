@@ -82,7 +82,7 @@ public abstract class IntegrationTestBase {
     }
 
     protected String bookingJson(Room room, String start, String end) throws Exception {
-        return json.writeValueAsString(Map.of("roomId", room.getId(), "title", "Meeting", "startTime", start, "endTime", end));
+        return json.writeValueAsString(Map.of("roomId", room.getId(), "title", "Meeting", "startTime", start, "endTime", end, "attendees", 2));
     }
 
     protected MockHttpServletRequestBuilder withJson(MockHttpServletRequestBuilder b, User who, String body) {
