@@ -117,7 +117,7 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
 .badge-danger { background: var(--danger-weak); color: var(--danger); border-color: transparent; }
 .badge-warning { background: var(--warning-weak); color: var(--warning); border-color: transparent; }
 .badge-accent { background: var(--accent-weak); color: var(--accent-text); border-color: transparent; }
-.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); text-transform: capitalize; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
 .chip-btn { cursor: pointer; font: inherit; font-size: 0.8rem; min-height: 32px; }
 .chip-btn:hover { border-color: var(--accent); }
 .chip-active { background: var(--accent-weak); border-color: var(--accent); color: var(--accent-text); }

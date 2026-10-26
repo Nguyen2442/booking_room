@@ -5,6 +5,7 @@ import { api, ApiError, errorMessage } from '../api/client';
 import { useRooms } from '../api/hooks';
 import type { Room } from '../api/types';
 import { Badge, Banner, Button, Chip, ConfirmDialog, EmptyState, ErrorState, Field, Modal, PageHeader, Skeleton } from '../components/ui';
+import { prettyEquipment } from '../lib/format';
 import { useToast } from '../lib/toast';
 
 const SUGGESTED = ['PROJECTOR', 'TV', 'WHITEBOARD', 'VIDEO_CONFERENCE', 'MICROPHONE'];
@@ -58,7 +59,7 @@ export function AdminRoomsPage() {
                 <tr key={r.id}>
                   <td><strong>{r.name}</strong>{r.location && <div className="muted small">{r.location}</div>}</td>
                   <td>{r.capacity}</td>
-                  <td><div className="quick">{r.equipment.length ? r.equipment.map((e) => <Chip key={e}>{e.replace(/_/g, ' ').toLowerCase()}</Chip>) : <span className="muted">—</span>}</div></td>
+                  <td><div className="quick">{r.equipment.length ? r.equipment.map((e) => <Chip key={e}>{prettyEquipment(e)}</Chip>) : <span className="muted">—</span>}</div></td>
                   <td>{r.active ? <Badge tone="success">Active</Badge> : <Badge>Inactive</Badge>}</td>
                   <td className="actions">
                     <Button variant="ghost" icon={<Pencil size={16} />} onClick={() => setEditing(r)} aria-label={`Edit ${r.name}`}>Edit</Button>
@@ -150,11 +151,11 @@ function RoomForm({ room, onClose, onSaved }: { room?: Room; onClose: () => void
           {SUGGESTED.map((s) => (
             <button key={s} type="button" aria-pressed={equipment.includes(s)} className={`chip chip-btn ${equipment.includes(s) ? 'chip-active' : ''}`}
               onClick={() => setEquipment(equipment.includes(s) ? equipment.filter((x) => x !== s) : [...equipment, s])}>
-              {s.replace(/_/g, ' ').toLowerCase()}
+              {prettyEquipment(s)}
             </button>
           ))}
           {equipment.filter((e) => !SUGGESTED.includes(e)).map((e) => (
-            <span key={e} className="chip chip-active">{e.replace(/_/g, ' ').toLowerCase()}
+            <span key={e} className="chip chip-active">{prettyEquipment(e)}
               <button type="button" className="chip-x" aria-label={`Remove ${e}`} onClick={() => setEquipment(equipment.filter((x) => x !== e))}><X size={12} /></button>
             </span>
           ))}

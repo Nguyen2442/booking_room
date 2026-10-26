@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react';
 import { errorMessage } from '../api/client';
 
@@ -27,14 +27,40 @@ export function Button({ variant = 'secondary', loading, icon, children, disable
   );
 }
 
+const CONTROLS = new Set(['input', 'select', 'textarea']);
+
+/** Walks the (small) subtree and wires the first form control to its label and error text. */
+function wire(node: ReactNode, id: string, errorId: string | undefined, state: { done: boolean }): ReactNode {
+  return Children.map(node, (child) => {
+    if (!isValidElement<{ children?: ReactNode; id?: string; type?: string }>(child)) return child;
+    if (typeof child.type === 'string' && CONTROLS.has(child.type) && !state.done) {
+      state.done = true;
+      const extra: Record<string, unknown> = { id: child.props.id ?? id };
+      if (errorId) {
+        extra['aria-invalid'] = true;
+        extra['aria-describedby'] = errorId;
+      }
+      return cloneElement(child, extra);
+    }
+    if (child.props.children) return cloneElement(child, undefined, wire(child.props.children, id, errorId, state));
+    return child;
+  });
+}
+
+/**
+ * Label is linked with htmlFor (not by wrapping the control): controls may contain buttons - e.g. the
+ * show-password toggle - and a wrapping <label> would fold their text into the input's accessible name.
+ */
 export function Field({ label, error, hint, children }: { label: string; error?: string; hint?: string; children: ReactNode }) {
+  const id = useId();
+  const errorId = error ? `${id}-err` : undefined;
   return (
-    <label className={`field ${error ? 'has-error' : ''}`}>
-      <span className="field-label">{label}</span>
-      {children}
+    <div className={`field ${error ? 'has-error' : ''}`}>
+      <label className="field-label" htmlFor={id}>{label}</label>
+      {wire(children, id, errorId, { done: false })}
       {hint && !error && <span className="field-hint">{hint}</span>}
-      {error && <span className="field-error" role="alert">{error}</span>}
-    </label>
+      {error && <span id={errorId} className="field-error" role="alert">{error}</span>}
+    </div>
   );
 }
 
@@ -80,17 +106,26 @@ export function Modal({
   open, onClose, title, children, footer, wide,
 }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // dialog.close() fires a native "close" event too; that one must not reach onClose, or closing a
+  // dialog from code (e.g. swapping to a confirmation dialog) would also tell the parent "user dismissed it".
+  const closedByCode = useRef(false);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
     if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
+    if (!open && d.open) {
+      closedByCode.current = true;
+      d.close();
+    }
   }, [open]);
   return (
     <dialog
       ref={ref}
       className={`modal ${wide ? 'modal-wide' : ''}`}
-      onClose={onClose}
+      onClose={() => {
+        if (closedByCode.current) closedByCode.current = false;
+        else onClose();
+      }}
       onMouseDown={(e) => { if (e.target === ref.current) onClose(); }}
       aria-label={title}
     >

@@ -52,7 +52,7 @@ services:
       app:
         condition: service_healthy
     ports:
-      - "${WEB_PORT:-3000}:80" # <- open this: http://localhost:3000
+      - "${WEB_PORT:-8088}:80" # <- open this: http://localhost:8088
     restart: unless-stopped
 
 volumes:

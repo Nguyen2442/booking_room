@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /workspace
 COPY pom.xml .
-RUN --mount=type=cache,target=/root/.m2 mvn -B -q dependency:go-offline
+# dependencies first: this layer is cached until pom.xml changes
+RUN mvn -B -q dependency:go-offline
 COPY src ./src
-RUN --mount=type=cache,target=/root/.m2 mvn -B -q -DskipTests package \
+RUN mvn -B -q -DskipTests package \
  && java -Djarmode=tools -jar target/meeting-room-booking-1.0.0.jar extract --layers --destination /layers
 
 FROM eclipse-temurin:21-jre-alpine

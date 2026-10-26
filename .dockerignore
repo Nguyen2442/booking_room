@@ -3,5 +3,8 @@ target
 .idea
 .vscode
 docs
+frontend
+scripts
 *.md
 .env
+target-test.log

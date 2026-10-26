@@ -14,7 +14,7 @@ import { SchedulePage } from './pages/SchedulePage';
 function RequireAuth({ admin }: { admin?: boolean }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  const cfg = useConfig();
+  const cfg = useConfig(!!user); // never call the API before we know who is signed in
   if (loading) return <div className="center-screen"><Spinner size={28} /></div>;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   if (admin && user.role !== 'ADMIN') return <Navigate to="/" replace />;

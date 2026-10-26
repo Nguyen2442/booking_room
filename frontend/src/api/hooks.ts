@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import type { AppConfig, DaySchedule, FreeSlot, Page, Room, RoomSchedule } from './types';
 
-export const useConfig = () =>
-  useQuery({ queryKey: ['config'], queryFn: () => api<AppConfig>('/config'), staleTime: Infinity });
+export const useConfig = (enabled = true) =>
+  useQuery({ queryKey: ['config'], queryFn: () => api<AppConfig>('/config'), staleTime: Infinity, enabled });
 
 /** All rooms visible to the user (the API caps the page size at 100, far above ~10 rooms). */
 export const useRooms = (active?: boolean) =>

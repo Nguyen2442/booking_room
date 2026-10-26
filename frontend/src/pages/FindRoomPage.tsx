@@ -7,7 +7,8 @@ import { useConfig, useRooms } from '../api/hooks';
 import type { Page, Room } from '../api/types';
 import { BookingDialog, type BookingDraft } from '../components/BookingDialog';
 import { Banner, Button, Chip, EmptyState, ErrorState, Field, PageHeader, Skeleton } from '../components/ui';
-import { addDays, durationLabel, fromMinutes, todayIn, toMinutes, zonedToIso } from '../lib/time';
+import { prettyEquipment } from '../lib/format';
+import { addDays, durationLabel, fromMinutes, nowMinutesIn, todayIn, toMinutes, zonedToIso } from '../lib/time';
 
 export function FindRoomPage() {
   const cfg = useConfig().data!;
@@ -16,9 +17,16 @@ export function FindRoomPage() {
   const ws = toMinutes(cfg.workdayStart);
   const we = toMinutes(cfg.workdayEnd);
 
-  const [date, setDate] = useState(params.get('date') ?? addDays(today, 0));
-  const [start, setStart] = useState(params.get('start') ?? fromMinutes(Math.max(ws, 9 * 60)));
-  const [end, setEnd] = useState(params.get('end') ?? fromMinutes(Math.max(ws, 9 * 60) + 60));
+  // Default to the next bookable hour: a default in the past would only ever show an error.
+  const defaults = useMemo(() => {
+    const next = Math.ceil((nowMinutesIn(cfg.timezone) + 1) / cfg.slotMinutes) * cfg.slotMinutes;
+    if (next + 60 <= we) return { date: today, start: Math.max(ws, next) };
+    return { date: addDays(today, 1), start: Math.max(ws, 9 * 60) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [date, setDate] = useState(params.get('date') ?? defaults.date);
+  const [start, setStart] = useState(params.get('start') ?? fromMinutes(defaults.start));
+  const [end, setEnd] = useState(params.get('end') ?? fromMinutes(defaults.start + 60));
   const [capacity, setCapacity] = useState('');
   const [equipment, setEquipment] = useState<string[]>([]);
   const [draft, setDraft] = useState<BookingDraft | null>(null);
@@ -55,7 +63,7 @@ export function FindRoomPage() {
   });
 
   const toggle = (e: string) => setEquipment((l) => (l.includes(e) ? l.filter((x) => x !== e) : [...l, e]));
-  const pretty = (e: string) => e.replace(/_/g, ' ').toLowerCase();
+  const pretty = prettyEquipment;
 
   return (
     <>

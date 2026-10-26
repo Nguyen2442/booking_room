@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useConfig, useDaySchedule } from '../api/hooks';
 import type { Booking } from '../api/types';
@@ -10,7 +10,8 @@ import { addDays, formatDate, fromMinutes, nowMinutesIn, todayIn, toMinutes, wal
 import { useToast } from '../lib/toast';
 import { DoorOpen } from 'lucide-react';
 
-const HOUR_W = 84; // px per hour
+const MIN_HOUR_W = 84; // px per hour; below this the grid scrolls horizontally
+const LABEL_W = 168;
 
 export function SchedulePage() {
   const cfg = useConfig().data!;
@@ -25,13 +26,33 @@ export function SchedulePage() {
   const ws = toMinutes(cfg.workdayStart);
   const we = toMinutes(cfg.workdayEnd);
   const hours = useMemo(() => Array.from({ length: Math.ceil((we - ws) / 60) }, (_, i) => ws + i * 60), [ws, we]);
-  const width = ((we - ws) / 60) * HOUR_W;
-  const x = (min: number) => ((min - ws) / 60) * HOUR_W;
+  // Fill the available width on large screens (so titles are readable), scroll on small ones.
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const [hourW, setHourW] = useState(MIN_HOUR_W);
+  useEffect(() => {
+    if (!scroller) return;
+    const fit = () => setHourW(Math.max(MIN_HOUR_W, Math.floor((scroller.clientWidth - LABEL_W - 2) / hours.length)));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(scroller);
+    return () => ro.disconnect();
+  }, [scroller, hours.length]);
+
+  const width = ((we - ws) / 60) * hourW;
+  const x = (min: number) => ((min - ws) / 60) * hourW;
   const nowMin = nowMinutesIn(cfg.timezone);
   const isToday = date === today;
   const isPast = date < today;
   const pastWidth = isPast ? width : isToday ? Math.max(0, Math.min(width, x(nowMin))) : 0;
   const maxDate = addDays(today, cfg.maxAdvanceDays);
+
+  // When looking at today, bring "now" into view instead of making people scroll through the past.
+  useEffect(() => {
+    if (!scroller) return;
+    scroller.scrollLeft = isToday ? Math.max(0, x(nowMinutesIn(cfg.timezone)) - 2 * hourW) : 0;
+    // only when the day changes or the grid appears, not on every refresh/resize
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scroller, date]);
 
   function openCreate(roomId: string, startMin?: number) {
     if (isPast || (isToday && startMin !== undefined && startMin + cfg.slotMinutes <= nowMin)) {
@@ -47,7 +68,7 @@ export function SchedulePage() {
   function rowClick(e: React.MouseEvent<HTMLDivElement>, roomId: string) {
     if (e.target !== e.currentTarget) return; // a booking block handles its own click
     const rect = e.currentTarget.getBoundingClientRect();
-    const min = ws + Math.floor((((e.clientX - rect.left) / HOUR_W) * 60) / cfg.slotMinutes) * cfg.slotMinutes;
+    const min = ws + Math.floor((((e.clientX - rect.left) / hourW) * 60) / cfg.slotMinutes) * cfg.slotMinutes;
     openCreate(roomId, min);
   }
 
@@ -85,12 +106,12 @@ export function SchedulePage() {
             <span><i className="dot past" /> Past</span>
             <span className="muted">Click an empty area to book</span>
           </div>
-          <div className="timeline card" role="region" aria-label="Room schedule" tabIndex={0}>
-            <div className="tl-inner" style={{ gridTemplateColumns: `168px ${width}px` }}>
+          <div ref={setScroller} className="timeline card" role="region" aria-label="Room schedule" tabIndex={0}>
+            <div className="tl-inner" style={{ gridTemplateColumns: `${LABEL_W}px ${width}px` }}>
               <div className="tl-corner" />
               <div className="tl-hours" style={{ width }}>
                 {hours.map((h) => (
-                  <div key={h} className="tl-hour" style={{ left: x(h), width: HOUR_W }}>{fromMinutes(h)}</div>
+                  <div key={h} className="tl-hour" style={{ left: x(h), width: hourW }}>{fromMinutes(h)}</div>
                 ))}
               </div>
 
@@ -102,7 +123,7 @@ export function SchedulePage() {
                   </div>
                   <div
                     className="tl-track"
-                    style={{ width, backgroundSize: `${HOUR_W}px 100%` }}
+                    style={{ width, backgroundSize: `${hourW}px 100%` }}
                     onClick={(e) => rowClick(e, room.id)}
                     role="group"
                     aria-label={`${room.name}: ${bookings.length} bookings`}
