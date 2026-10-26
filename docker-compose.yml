@@ -11,7 +11,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d booking"]
+      # pg_isready alone is not enough: it reports "ready" while the init-time temporary server is up,
+      # before the database exists. A real query against the target database avoids that race.
+      test: ["CMD-SHELL", "psql -U $${POSTGRES_USER} -d booking -tAc 'select 1' | grep -q 1"]
       interval: 5s
       timeout: 3s
       retries: 20

@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: booking
       POSTGRES_PASSWORD: booking
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U booking -d booking_test"]
+      test: ["CMD-SHELL", "psql -U booking -d booking_test -tAc 'select 1' | grep -q 1"]
       interval: 3s
       timeout: 3s
       retries: 20

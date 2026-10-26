@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:postgresql://localhost:5432/booking_test}
+    username: ${TEST_DB_USER:booking}
+    password: ${TEST_DB_PASSWORD:booking}
+    hikari:
+      maximum-pool-size: 30
+app:
+  jwt:
+    secret: test-secret-test-secret-test-secret-test-secret
+  bootstrap:
+    admin-email: ""
+    admin-password: ""
+management:
+  server:
+    port: -1

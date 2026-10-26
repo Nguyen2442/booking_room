@@ -72,6 +72,10 @@ springdoc:
 logging:
   pattern:
     level: "%5p [%X{requestId:-}]"
+  level:
+    # A booking conflict is a normal business outcome. Hibernate would log it as ERROR with the SQL;
+    # real database failures are still logged (with stack trace) by GlobalExceptionHandler.
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: "OFF"
 
 app:
   jwt:
