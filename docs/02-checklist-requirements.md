@@ -15,7 +15,7 @@
 - [x] Spring Boot 3
 - [x] PostgreSQL
 - [x] Docker: `docker compose up` chạy toàn bộ (app + db, tự migrate)
-- [x] Thư viện bổ sung hợp lý (Flyway, Security/JWT, springdoc, Testcontainers…)
+- [x] Thư viện bổ sung hợp lý (Flyway, Security/JWT, springdoc…)
 
 ## C. Nộp bài
 - [x] Git repository, **giữ nguyên lịch sử commit** (commit nhỏ, message rõ, không squash/force-push)
