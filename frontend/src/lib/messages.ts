@@ -110,9 +110,9 @@ export const en = {
   // ---- privacy
   'priv.label': 'Private',
   'priv.checkbox': 'Private meeting',
-  'priv.hint': 'Others only see that the room is busy: no title, description or name. Administrators can still see the details.',
-  'priv.maskedBody': 'The details of this meeting are private. You can only see that the room is busy.',
-  'priv.ownerNote': 'This meeting is private: only its owner and administrators can see these details.',
+  'priv.hint': 'Others will only see that the room is taken, not the title, description or who booked it. Administrators can still see the details.',
+  'priv.maskedBody': 'The person who booked this room has chosen to keep the details private. You can only see that the room is taken during this time.',
+  'priv.ownerNote': 'Private meeting: only the person who booked it and administrators can see these details.',
 
   // ---- recurrence
   'rec.repeat': 'Repeat',
@@ -497,9 +497,9 @@ export const vi: Record<Key, string> = {
 
   'priv.label': 'Riêng tư',
   'priv.checkbox': 'Họp riêng tư',
-  'priv.hint': 'Người khác chỉ thấy phòng đang bận: không thấy tiêu đề, mô tả hay tên. Quản trị viên vẫn xem được chi tiết.',
-  'priv.maskedBody': 'Nội dung cuộc họp này là riêng tư. Bạn chỉ thấy phòng đang bận.',
-  'priv.ownerNote': 'Cuộc họp này là riêng tư: chỉ người đặt và quản trị viên xem được chi tiết.',
+  'priv.hint': 'Người khác chỉ biết phòng đã có người đặt, không thấy tiêu đề, mô tả hay người đặt. Quản trị viên vẫn xem được chi tiết.',
+  'priv.maskedBody': 'Người đặt đã chọn ẩn thông tin cuộc họp này. Bạn chỉ biết phòng đã có người đặt trong khung giờ này.',
+  'priv.ownerNote': 'Cuộc họp riêng tư: chỉ người đặt và quản trị viên xem được thông tin này.',
 
   'rec.repeat': 'Lặp lại',
   'rec.none': 'Không lặp',

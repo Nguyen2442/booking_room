@@ -253,7 +253,7 @@ await admin.ctx.close();
   if (html.includes('Salary') || html.includes('secret offer')) throw new Error('secret text reached the DOM for another employee');
   await bb.page.screenshot({ path: out('37-private-masked') });
   await bb.page.locator('.tl-booking.masked').first().click();
-  await bb.page.getByText('The details of this meeting are private').waitFor();
+  await bb.page.getByText('has chosen to keep the details private').waitFor();
   await bb.page.screenshot({ path: out('38-private-detail') });
   await bb.page.keyboard.press('Escape');
   // the room is still busy: bob cannot take that slot
@@ -274,7 +274,7 @@ await admin.ctx.close();
   const ad = await login('admin@company.local', 'Admin12345!');
   await ad.page.getByLabel('Date', { exact: true }).fill(D2);
   await ad.page.locator('.tl-booking', { hasText: SECRET }).first().click();
-  await ad.page.getByText('This meeting is private: only its owner and administrators').waitFor();
+  await ad.page.getByText('Private meeting: only the person who booked it and administrators').waitFor();
   await ad.page.getByText(SECRET_DESC).waitFor();
   await ad.page.screenshot({ path: out('39-private-admin') });
   ok('admin sees the full private booking');
