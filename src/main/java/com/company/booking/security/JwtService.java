@@ -20,6 +20,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class JwtService {
 
+    /** A verified token: who it claims to be and the account version it was issued under. */
+    public record ParsedToken(AuthUser user, int version) {}
+
     private final SecretKey key;
     private final Duration ttl;
     private final String issuer;
@@ -43,6 +46,7 @@ public class JwtService {
                 .subject(user.getId().toString())
                 .claim("email", user.getEmail())
                 .claim("role", user.getRole().name())
+                .claim("ver", user.getTokenVersion())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)))
                 .signWith(key)
@@ -50,7 +54,7 @@ public class JwtService {
     }
 
     /** Returns empty for any invalid token (bad signature, expired, malformed, wrong issuer) - never throws. */
-    public Optional<AuthUser> parse(String token) {
+    public Optional<ParsedToken> parse(String token) {
         try {
             Claims c = Jwts.parser()
                     .verifyWith(key)
@@ -59,8 +63,10 @@ public class JwtService {
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            return Optional.of(new AuthUser(
-                    UUID.fromString(c.getSubject()), c.get("email", String.class), Role.valueOf(c.get("role", String.class))));
+            Integer ver = c.get("ver", Integer.class);
+            return Optional.of(new ParsedToken(new AuthUser(
+                    UUID.fromString(c.getSubject()), c.get("email", String.class), Role.valueOf(c.get("role", String.class))),
+                    ver == null ? 0 : ver));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }

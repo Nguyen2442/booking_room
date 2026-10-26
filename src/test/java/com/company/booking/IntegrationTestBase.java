@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +30,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(TestClockConfig.class)
 public abstract class IntegrationTestBase {
 
     public static final String PASSWORD = "Password123!";
@@ -41,12 +43,14 @@ public abstract class IntegrationTestBase {
     @Autowired protected JwtService jwt;
     @Autowired protected PasswordEncoder encoder;
     @Autowired protected AppProperties props;
+    @Autowired protected MutableClock clock;
 
     protected ZoneId zone;
 
     @BeforeEach
     void cleanDatabase() {
         zone = props.rules().timezone();
+        clock.reset();
         jdbc.execute("TRUNCATE bookings, room_equipment, rooms, users CASCADE");
     }
 
@@ -87,6 +91,11 @@ public abstract class IntegrationTestBase {
 
     protected MockHttpServletRequestBuilder withJson(MockHttpServletRequestBuilder b, User who, String body) {
         return b.header("Authorization", bearer(who)).contentType(MediaType.APPLICATION_JSON).content(body);
+    }
+
+    /** Pins "now" to a wall-clock time today in the company zone, e.g. pinNow(10, 20) -> 10:20. */
+    protected void pinNow(int hour, int minute) {
+        clock.set(LocalDate.now(zone).atTime(hour, minute).atZone(zone).toInstant());
     }
 
     protected Instant instant(String iso) {

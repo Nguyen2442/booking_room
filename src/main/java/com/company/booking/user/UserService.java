@@ -1,16 +1,21 @@
 package com.company.booking.user;
 
 import com.company.booking.booking.BookingRepository;
+import com.company.booking.common.AuditLog;
+import com.company.booking.security.UserStatusCache;
 import com.company.booking.common.ApiException;
 import com.company.booking.common.PageResponse;
 import com.company.booking.common.SortGuard;
 import com.company.booking.user.UserDtos.CreateUserRequest;
 import com.company.booking.user.UserDtos.UpdateUserRequest;
 import com.company.booking.user.UserDtos.UserResponse;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.criteria.Predicate;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -32,6 +37,10 @@ public class UserService {
     private final BookingRepository bookings;
     private final PasswordEncoder encoder;
     private final Clock clock;
+    private final UserStatusCache statusCache;
+
+    @PersistenceContext
+    private EntityManager em;
 
     public static String normalizeEmail(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
@@ -50,7 +59,9 @@ public class UserService {
         u.setPasswordHash(encoder.encode(req.password()));
         u.setRole(req.role());
         try {
-            return UserResponse.from(users.saveAndFlush(u));
+            User saved = users.saveAndFlush(u);
+            AuditLog.record("user.create", Map.of("user", saved.getEmail(), "role", saved.getRole()));
+            return UserResponse.from(saved);
         } catch (DataIntegrityViolationException e) {
             // lost a race with a concurrent create of the same email
             throw emailTaken();
@@ -68,7 +79,8 @@ public class UserService {
         Specification<User> spec = (root, query, cb) -> {
             List<Predicate> p = new ArrayList<>();
             if (q != null && !q.isBlank()) {
-                String like = "%" + escapeLike(q.trim().toLowerCase(Locale.ROOT)) + "%";
+                String term = q.trim().toLowerCase(Locale.ROOT);
+                String like = "%" + escapeLike(term.length() > 100 ? term.substring(0, 100) : term) + "%";
                 p.add(cb.or(cb.like(cb.lower(root.get("email")), like, '\\'),
                         cb.like(cb.lower(root.get("fullName")), like, '\\')));
             }
@@ -91,13 +103,28 @@ public class UserService {
             // Prevents the last admin from locking everybody out by accident.
             throw ApiException.unprocessable("CANNOT_MODIFY_SELF", "You cannot deactivate or demote your own account");
         }
+        boolean losingAdmin = u.getRole() == Role.ADMIN && u.isActive() && (req.role() != Role.ADMIN || !req.active());
+        if (losingAdmin) {
+            // Two admins demoting each other at the same moment would leave nobody in charge: serialize and re-count.
+            em.createNativeQuery("select 1 from (select pg_advisory_xact_lock(4242)) t").getSingleResult();
+            if (users.countByRoleAndActive(Role.ADMIN, true) < 2) {
+                throw ApiException.unprocessable("LAST_ADMIN", "There must always be at least one active administrator");
+            }
+        }
+        boolean privilegeChange = deactivating || u.getRole() != req.role();
         u.setFullName(req.fullName().trim());
         u.setRole(req.role());
         u.setActive(req.active());
+        if (privilegeChange) {
+            u.setTokenVersion(u.getTokenVersion() + 1); // signs the user out everywhere
+        }
         if (deactivating) {
             bookings.cancelFutureByUser(id, clock.instant(), actorId, "User account deactivated");
         }
-        return UserResponse.from(users.saveAndFlush(u));
+        User saved = users.saveAndFlush(u);
+        statusCache.invalidateAfterCommit(id);
+        AuditLog.record("user.update", Map.of("user", saved.getEmail(), "role", saved.getRole(), "active", saved.isActive()));
+        return UserResponse.from(saved);
     }
 
     @Transactional
@@ -105,18 +132,10 @@ public class UserService {
         PasswordPolicy.check(newPassword);
         User u = find(id);
         u.setPasswordHash(encoder.encode(newPassword));
+        u.setTokenVersion(u.getTokenVersion() + 1); // whoever held the old password is signed out
         users.save(u);
-    }
-
-    @Transactional
-    public void changePassword(UUID id, String current, String newPassword) {
-        PasswordPolicy.check(newPassword);
-        User u = find(id);
-        if (!encoder.matches(current, u.getPasswordHash())) {
-            throw ApiException.unprocessable("INVALID_CURRENT_PASSWORD", "Current password is incorrect");
-        }
-        u.setPasswordHash(encoder.encode(newPassword));
-        users.save(u);
+        statusCache.invalidateAfterCommit(id);
+        AuditLog.record("user.reset-password", Map.of("user", u.getEmail()));
     }
 
     private User find(UUID id) {

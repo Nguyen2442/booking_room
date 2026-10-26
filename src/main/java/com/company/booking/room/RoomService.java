@@ -2,12 +2,14 @@ package com.company.booking.room;
 
 import com.company.booking.booking.BookingRepository;
 import com.company.booking.common.ApiException;
+import com.company.booking.common.AuditLog;
 import com.company.booking.common.PageResponse;
 import com.company.booking.common.SortGuard;
 import com.company.booking.room.RoomDtos.RoomRequest;
 import com.company.booking.room.RoomDtos.RoomResponse;
 import java.time.Clock;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -45,7 +47,9 @@ public class RoomService {
         }
         Room r = new Room();
         apply(r, req);
-        return save(r);
+        RoomResponse res = save(r);
+        AuditLog.record("room.create", Map.of("room", res.name()));
+        return res;
     }
 
     @Transactional
@@ -54,8 +58,16 @@ public class RoomService {
         if (rooms.existsByNameIgnoreCaseAndIdNot(req.name().trim(), id)) {
             throw nameTaken();
         }
+        if (req.capacity() < r.getCapacity()
+                && bookings.existsUpcomingOverCapacity(id, clock.instant(), req.capacity())) {
+            // shrinking a room under people who are already booked in would silently break those bookings
+            throw ApiException.conflict("CAPACITY_CONFLICTS_BOOKINGS",
+                    "Upcoming bookings have more attendees than " + req.capacity() + " seats; move or cancel them first");
+        }
         apply(r, req);
-        return save(r);
+        RoomResponse res = save(r);
+        AuditLog.record("room.update", Map.of("room", res.name(), "capacity", res.capacity()));
+        return res;
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +103,7 @@ public class RoomService {
         }
         r.setActive(false);
         rooms.save(r);
+        AuditLog.record("room.deactivate", Map.of("room", r.getName()));
     }
 
     @Transactional

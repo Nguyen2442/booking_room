@@ -4,7 +4,11 @@ import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -23,6 +27,12 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    private final MeterRegistry metrics;
+
+    public GlobalExceptionHandler(MeterRegistry metrics) {
+        this.metrics = metrics;
+    }
 
     public static ProblemDetail problem(HttpStatus status, String code, String detail) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
@@ -58,12 +68,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         pd.setProperty("code", ex.getCode());
         ex.getProperties().forEach(pd::setProperty);
         enrich(pd);
+        // one counter per business error code: spikes of RATE_LIMITED / quota errors are visible on a dashboard
+        metrics.counter("api.errors", "code", ex.getCode(), "status", String.valueOf(ex.getStatus().value())).increment();
         return ResponseEntity.status(ex.getStatus()).body(pd);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex) {
         return response(HttpStatus.FORBIDDEN, "FORBIDDEN", "You do not have permission to perform this action");
+    }
+
+    /**
+     * The database is busy (a lock was not granted within 5 s, a statement hit its timeout, or the pool is
+     * exhausted): tell the client to retry instead of letting the request hang or fail with an opaque 500.
+     */
+    @ExceptionHandler({PessimisticLockingFailureException.class, QueryTimeoutException.class,
+            DataAccessResourceFailureException.class})
+    public ResponseEntity<Object> handleBusy(Exception ex) {
+        log.warn("Database busy or unavailable: {}", ex.toString());
+        ResponseEntity<Object> r = response(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_BUSY",
+                "The system is busy, please try again in a moment");
+        return ResponseEntity.status(r.getStatusCode()).header("Retry-After", "2").body(r.getBody());
     }
 
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)

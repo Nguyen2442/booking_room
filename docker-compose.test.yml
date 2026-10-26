@@ -5,6 +5,8 @@ name: daoukiwoom-test
 services:
   db:
     image: postgres:16-alpine
+    # test database: small and fast, durability is irrelevant here (and it keeps the memory footprint low)
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=60", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
     environment:
       POSTGRES_DB: booking_test
       POSTGRES_USER: booking
@@ -22,10 +24,10 @@ services:
         condition: service_healthy
     environment:
       TEST_DB_URL: jdbc:postgresql://db:5432/booking_test
-      MAVEN_OPTS: -Xmx160m -XX:+UseSerialGC
+      MAVEN_OPTS: -Xmx160m -XX:+UseSerialGC -XX:TieredStopAtLevel=1
     volumes:
       - .:/workspace
       - m2cache:/root/.m2
-    command: mvn -B test "-DargLine=-Xmx420m -XX:+UseSerialGC -Xss512k"
+    command: mvn -B test "-DargLine=-Xmx380m -XX:+UseSerialGC -Xss512k -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=48m -XX:TieredStopAtLevel=1"
 volumes:
   m2cache:

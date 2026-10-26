@@ -3,6 +3,7 @@ package com.company.booking.booking;
 import com.company.booking.booking.BookingDtos.BlockResult;
 import com.company.booking.booking.BookingDtos.CreateBlockRequest;
 import com.company.booking.common.ApiException;
+import com.company.booking.common.AuditLog;
 import com.company.booking.room.Room;
 import com.company.booking.room.RoomRepository;
 import com.company.booking.security.AuthUser;
@@ -67,6 +68,7 @@ public class RoomBlockService {
         block.setStartTime(w.start());
         block.setEndTime(w.end());
         Booking saved = bookingService.saveOrConflict(block, room);
+        AuditLog.record("room.block", Map.of("room", room.getName(), "reason", reason, "cancelledBookings", overlapping.size()));
         return new BlockResult(mapper.toResponse(saved), overlapping.stream().map(mapper::toResponse).toList());
     }
 }

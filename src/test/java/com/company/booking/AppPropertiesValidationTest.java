@@ -38,6 +38,15 @@ class AppPropertiesValidationTest {
     }
 
     private static AppProperties.Rules rules(int slot, int min, int max, String s, String e) {
-        return new AppProperties.Rules(Z, LocalTime.parse(s), LocalTime.parse(e), slot, min, max, 90, 50);
+        return new AppProperties.Rules(Z, LocalTime.parse(s), LocalTime.parse(e), slot, min, max, 30, 90, 20, 480, 15);
+    }
+
+    @Test
+    void horizonsAndDailyLimitMustBeConsistent() {
+        assertThat(new AppProperties.Rules(Z, LocalTime.of(8, 0), LocalTime.of(20, 0), 15, 15, 240, 30, 90, 20, 480, 15).isHorizonValid()).isTrue();
+        // series horizon shorter than the single-booking horizon
+        assertThat(new AppProperties.Rules(Z, LocalTime.of(8, 0), LocalTime.of(20, 0), 15, 15, 240, 60, 30, 20, 480, 15).isHorizonValid()).isFalse();
+        // a daily limit smaller than one maximal booking would make that booking impossible
+        assertThat(new AppProperties.Rules(Z, LocalTime.of(8, 0), LocalTime.of(20, 0), 15, 15, 240, 30, 90, 20, 120, 15).isHorizonValid()).isFalse();
     }
 }

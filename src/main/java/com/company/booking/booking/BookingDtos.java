@@ -91,5 +91,6 @@ public final class BookingDtos {
             UUID id, BookingKind kind, RoomRef room, BookerRef booker, String title, String description,
             Integer attendees, UUID seriesId, @JsonProperty("private") boolean privateMeeting, boolean masked,
             OffsetDateTime startTime, OffsetDateTime endTime, BookingStatus status,
-            OffsetDateTime cancelledAt, String cancelReason, OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
+            OffsetDateTime cancelledAt, String cancelReason, boolean cancelledByAnother,
+            OffsetDateTime createdAt, OffsetDateTime updatedAt) {}
 }

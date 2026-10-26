@@ -10,6 +10,7 @@ import com.company.booking.user.Role;
 import com.company.booking.user.User;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 class AuthIntegrationTest extends IntegrationTestBase {
 
@@ -119,13 +120,95 @@ class AuthIntegrationTest extends IntegrationTestBase {
     }
 
     @Test
-    void changePassword() throws Exception {
+    void changePasswordSignsOutOtherSessionsAndReturnsAFreshToken() throws Exception {
         User u = user("alice@company.local", Role.USER);
+        String oldToken = bearer(u);
         mvc.perform(withJson(post("/api/v1/auth/change-password"), u, "{\"currentPassword\":\"bad\",\"newPassword\":\"NewPassword1!\"}"))
                 .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INVALID_CURRENT_PASSWORD"));
-        mvc.perform(withJson(post("/api/v1/auth/change-password"), u, "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"NewPassword1!\"}"))
-                .andExpect(status().isNoContent());
+        String res = mvc.perform(withJson(post("/api/v1/auth/change-password"), u, "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"NewPassword1!\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accessToken").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        String newToken = json.readTree(res).get("accessToken").asText();
+        // the token that was used to change the password (or any other session) no longer works ...
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", oldToken)).andExpect(status().isUnauthorized());
+        // ... the fresh one does, and so does logging in with the new password
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + newToken)).andExpect(status().isOk());
         mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON).content(login("alice@company.local", "NewPassword1!")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void guessingTheCurrentPasswordWithAStolenTokenIsThrottled() throws Exception {
+        User u = user("thief-target@company.local", Role.USER);
+        for (int i = 0; i < 5; i++) {
+            mvc.perform(withJson(post("/api/v1/auth/change-password"), u, "{\"currentPassword\":\"guess-" + i + "\",\"newPassword\":\"NewPassword1!\"}"))
+                    .andExpect(status().isUnprocessableEntity());
+        }
+        mvc.perform(withJson(post("/api/v1/auth/change-password"), u, "{\"currentPassword\":\"" + PASSWORD + "\",\"newPassword\":\"NewPassword1!\"}"))
+                .andExpect(status().isTooManyRequests());
+    }
+
+    @Test
+    void deactivatingAUserEndsTheirSessionImmediately() throws Exception {
+        User admin = user("admin@company.local", Role.ADMIN);
+        User alice = user("alice@company.local", Role.USER);
+        String aliceToken = bearer(alice);
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", aliceToken)).andExpect(status().isOk()); // warms the cache
+        mvc.perform(withJson(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/admin/users/" + alice.getId()), admin,
+                "{\"fullName\":\"alice\",\"role\":\"USER\",\"active\":false}")).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", aliceToken))
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    void anAdminPasswordResetSignsTheUserOut() throws Exception {
+        User admin = user("admin@company.local", Role.ADMIN);
+        User alice = user("alice@company.local", Role.USER);
+        String aliceToken = bearer(alice);
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", aliceToken)).andExpect(status().isOk());
+        mvc.perform(withJson(post("/api/v1/admin/users/" + alice.getId() + "/reset-password"), admin, "{\"newPassword\":\"Fresh12345!\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", aliceToken)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void aDemotedAdminLosesAdminRightsAtOnce() throws Exception {
+        User boss = user("boss@company.local", Role.ADMIN);
+        User other = user("other@company.local", Role.ADMIN);
+        String otherToken = bearer(other);
+        mvc.perform(get("/api/v1/admin/users").header("Authorization", otherToken)).andExpect(status().isOk());
+        mvc.perform(withJson(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/admin/users/" + other.getId()), boss,
+                "{\"fullName\":\"other\",\"role\":\"USER\",\"active\":true}")).andExpect(status().isOk());
+        // the old token (which says ADMIN) must not work any more
+        mvc.perform(get("/api/v1/admin/users").header("Authorization", otherToken)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void thereIsAlwaysAtLeastOneActiveAdmin_evenWhenTwoAdminsDemoteEachOtherAtTheSameTime() throws Exception {
+        User a = user("a@company.local", Role.ADMIN);
+        User b = user("b@company.local", Role.ADMIN);
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var go = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.Callable<String> aDemotesB = () -> demote(go, a, b);
+        java.util.concurrent.Callable<String> bDemotesA = () -> demote(go, b, a);
+        var f1 = pool.submit(aDemotesB);
+        var f2 = pool.submit(bDemotesA);
+        go.countDown();
+        java.util.List<String> outcomes = java.util.List.of(f1.get(), f2.get());
+        pool.shutdownNow();
+        org.assertj.core.api.Assertions.assertThat(outcomes).containsExactlyInAnyOrder("OK", "LAST_ADMIN");
+        org.assertj.core.api.Assertions.assertThat(users.countByRoleAndActive(Role.ADMIN, true)).isEqualTo(1);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired com.company.booking.user.UserService userService;
+
+    private String demote(java.util.concurrent.CountDownLatch go, User actor, User target) throws Exception {
+        go.await();
+        try {
+            userService.update(actor.getId(), target.getId(), new com.company.booking.user.UserDtos.UpdateUserRequest("x", Role.USER, true));
+            return "OK";
+        } catch (com.company.booking.common.ApiException e) {
+            return e.getCode();
+        }
     }
 }

@@ -11,6 +11,7 @@ import com.company.booking.booking.BookingDtos.SkippedOccurrence;
 import com.company.booking.booking.BookingDtos.UpdateBookingRequest;
 import com.company.booking.common.ApiException;
 import com.company.booking.common.AppProperties;
+import com.company.booking.common.AuditLog;
 import com.company.booking.common.PageResponse;
 import com.company.booking.common.SortGuard;
 import com.company.booking.room.Room;
@@ -18,9 +19,11 @@ import com.company.booking.room.RoomRepository;
 import com.company.booking.security.AuthUser;
 import com.company.booking.user.User;
 import com.company.booking.user.UserRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -28,7 +31,9 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +50,8 @@ public class BookingService {
     private static final String OVERLAP_CONSTRAINT = "bookings_no_overlap";
     private static final String EXCLUSION_VIOLATION = "23P01";
     private static final Set<String> SORTABLE = Set.of("startTime", "endTime", "createdAt", "status");
+    /** "No booking to exclude" for the quota queries (a real id can never be all zeros). */
+    private static final UUID NONE = new UUID(0, 0);
 
     private final BookingRepository bookings;
     private final RoomRepository rooms;
@@ -53,13 +60,14 @@ public class BookingService {
     private final BookingMapper mapper;
     private final AppProperties props;
     private final Clock clock;
+    private final MeterRegistry metrics;
 
     @Transactional
     public BookingResponse create(UUID userId, CreateBookingRequest req) {
         TimeWindow w = rules.validate(req.startTime(), req.endTime());
-        User user = activeUser(userId);
+        User user = lockedActiveUser(userId);
         Room room = bookableRoom(req.roomId(), req.attendees());
-        enforceLimit(userId, 1);
+        enforceQuotas(userId, List.of(w), NONE);
 
         // Friendly pre-check; the DB exclusion constraint below is what actually guarantees correctness.
         if (bookings.existsConflict(room.getId(), w.start(), w.end())) {
@@ -67,12 +75,15 @@ public class BookingService {
         }
         Booking b = newBooking(room, user, req.title(), req.description(), w, req.attendees(), null,
                 Boolean.TRUE.equals(req.privateMeeting()));
-        return mapper.toResponse(saveOrConflict(b, room));
+        Booking saved = saveOrConflict(b, room);
+        metrics.counter("booking.created", "kind", "single").increment();
+        return mapper.toResponse(saved);
     }
 
     /**
-     * Recurring booking. All occurrences are validated with the same rules as a single booking; the room is
-     * share-locked once, so a concurrent room closure waits and the exclusion constraint still guards every row.
+     * Recurring booking. All occurrences are validated with the same rules as a single booking (but may reach
+     * {@code maxSeriesDays} ahead); the user and room rows are locked once, so quotas and room closures cannot race,
+     * and the exclusion constraint still guards every row.
      */
     @Transactional
     public SeriesResponse createSeries(UUID userId, CreateSeriesRequest req) {
@@ -89,13 +100,13 @@ public class BookingService {
             OffsetDateTime s = ZonedDateTime.of(d, first.toLocalTime(), zone).toOffsetDateTime();
             OffsetDateTime e = ZonedDateTime.of(d, firstEnd.toLocalTime(), zone).toOffsetDateTime();
             try {
-                windows.add(rules.validate(s, e));
+                windows.add(windows.isEmpty() ? rules.validate(s, e) : rules.validateOccurrence(s, e));
             } catch (ApiException ex) {
-                throw new ApiException(ex.getStatus(), ex.getCode(), "Occurrence on " + d + ": " + ex.getMessage());
+                throw new ApiException(ex.getStatus(), ex.getCode(), "Occurrence on " + d + ": " + ex.getMessage(), ex.getProperties());
             }
         }
 
-        User user = activeUser(userId);
+        User user = lockedActiveUser(userId);
         Room room = bookableRoom(req.roomId(), req.attendees());
 
         List<LocalDate> clashing = new ArrayList<>();
@@ -113,7 +124,7 @@ public class BookingService {
                     clashing.size() + " of " + dates.size() + " occurrences clash with existing bookings")
                     .with("conflicts", clashing);
         }
-        enforceLimit(userId, free.size());
+        enforceQuotas(userId, free.stream().map(windows::get).toList(), NONE);
 
         UUID seriesId = UUID.randomUUID();
         List<Booking> toSave = new ArrayList<>();
@@ -131,11 +142,16 @@ public class BookingService {
             }
             throw e;
         }
+        metrics.counter("booking.created", "kind", "series").increment(saved.size());
         List<SkippedOccurrence> skipped = clashing.stream()
                 .map(d -> new SkippedOccurrence(d, "ROOM_BOOKED")).toList();
         return new SeriesResponse(seriesId, saved.stream().map(mapper::toResponse).toList(), skipped);
     }
 
+    /**
+     * Edit a booking. Before it starts anything may change (including the room). Once it is running only the end can
+     * move: extend a meeting that overruns, or end it early to give the room back.
+     */
     @Transactional
     public BookingResponse update(AuthUser actor, UUID id, UpdateBookingRequest req) {
         Booking b = load(id);
@@ -147,16 +163,25 @@ public class BookingService {
         if (b.getStatus() != BookingStatus.CONFIRMED) {
             throw ApiException.conflict("BOOKING_NOT_ACTIVE", "A cancelled booking cannot be modified");
         }
-        if (!b.getStartTime().isAfter(now)) {
-            throw ApiException.unprocessable("BOOKING_ALREADY_STARTED", "A booking that has started cannot be modified");
+        if (!b.getEndTime().isAfter(now)) {
+            throw ApiException.unprocessable("BOOKING_ALREADY_ENDED", "A booking that has ended cannot be modified");
         }
-        TimeWindow w = rules.validate(req.startTime(), req.endTime());
+        boolean ongoing = !b.getStartTime().isAfter(now);
+        TimeWindow w = ongoing ? rules.validateOngoing(req.startTime(), req.endTime())
+                : rules.validate(req.startTime(), req.endTime());
 
         UUID targetRoomId = req.roomId() != null ? req.roomId() : b.getRoom().getId();
+        if (ongoing && (!w.start().equals(b.getStartTime()) || !targetRoomId.equals(b.getRoom().getId()))) {
+            throw ApiException.unprocessable("BOOKING_ALREADY_STARTED",
+                    "A meeting that has started can only have its end time changed");
+        }
+        lockedActiveUser(b.getUser().getId());
         Room room = bookableRoom(targetRoomId, req.attendees());
         if (bookings.existsConflictExcluding(room.getId(), w.start(), w.end(), b.getId())) {
             throw conflict();
         }
+        enforceQuotas(b.getUser().getId(), List.of(w), b.getId());
+
         b.setRoom(room);
         b.setTitle(req.title().trim());
         b.setDescription(req.description());
@@ -179,7 +204,12 @@ public class BookingService {
             throw ApiException.unprocessable("BOOKING_ALREADY_ENDED", "A booking that has ended cannot be cancelled");
         }
         markCancelled(b, now, actor.id(), reason);
-        return mapper.toResponse(bookings.saveAndFlush(b));
+        Booking saved = bookings.saveAndFlush(b);
+        metrics.counter("booking.cancelled").increment();
+        if (!b.getUser().getId().equals(actor.id())) {
+            AuditLog.record("booking.cancel.by-admin", Map.of("booking", id, "owner", b.getUser().getId(), "room", b.getRoom().getName()));
+        }
+        return mapper.toResponse(saved);
     }
 
     /** Cancels this occurrence and every later, still-active one of the same series. */
@@ -194,6 +224,10 @@ public class BookingService {
         List<Booking> occurrences = bookings.findActiveSeriesFrom(b.getSeriesId(), b.getStartTime(), now);
         occurrences.forEach(o -> markCancelled(o, now, actor.id(), reason));
         bookings.saveAllAndFlush(occurrences);
+        metrics.counter("booking.cancelled").increment(occurrences.size());
+        if (!b.getUser().getId().equals(actor.id())) {
+            AuditLog.record("booking.cancel-series.by-admin", Map.of("series", b.getSeriesId(), "owner", b.getUser().getId(), "count", occurrences.size()));
+        }
         return new CancelSeriesResponse(occurrences.size());
     }
 
@@ -219,9 +253,12 @@ public class BookingService {
 
     // ---------------------------------------------------------------- helpers
 
-    private User activeUser(UUID userId) {
-        // The JWT may outlive the account, so check the source of truth.
-        return users.findById(userId).filter(User::isActive)
+    /**
+     * Row-locks the person (their JWT may outlive the account, so the database is the source of truth). Holding the
+     * lock while quotas are checked makes the limits hard guarantees even when one person fires parallel requests.
+     */
+    private User lockedActiveUser(UUID userId) {
+        return users.findByIdForUpdate(userId).filter(User::isActive)
                 .orElseThrow(() -> ApiException.forbidden("ACCOUNT_DISABLED", "Your account is disabled"));
     }
 
@@ -239,14 +276,52 @@ public class BookingService {
         return room;
     }
 
-    /** Soft limit against hoarding rooms (not race-free; the hard guarantee is only for overlaps). */
-    private void enforceLimit(UUID userId, int adding) {
-        int max = props.rules().maxActiveBookingsPerUser();
-        long active = bookings.countActiveByUser(userId, clock.instant());
-        if (active + adding > max) {
+    /**
+     * Two limits against one person hoarding rooms (a mistake, or a hijacked account):
+     * how many upcoming bookings they hold, and how many hours they book on any single day.
+     * {@code excludeId} is the booking being edited, so it is not counted twice.
+     */
+    private void enforceQuotas(UUID ownerId, List<TimeWindow> adding, UUID excludeId) {
+        AppProperties.Rules cfg = props.rules();
+        Instant now = clock.instant();
+        // the window ends with the last bookable calendar day, the same boundary the validation rules use
+        Instant windowEnd = rules.lastBookableDay(cfg.maxAdvanceDays()).plusDays(1).atStartOfDay(rules.zone()).toInstant();
+
+        long newInWindow = adding.stream().filter(w -> w.start().isBefore(windowEnd)).count();
+        long held = bookings.countActiveInWindow(ownerId, now, windowEnd, excludeId);
+        if (held + newInWindow > cfg.maxActiveBookingsPerUser()) {
+            reject("quota.active");
             throw ApiException.unprocessable("BOOKING_LIMIT_REACHED",
-                    "You have " + active + " upcoming bookings and the limit is " + max);
+                    "You can hold at most " + cfg.maxActiveBookingsPerUser() + " upcoming bookings in the next "
+                            + cfg.maxAdvanceDays() + " days (you have " + held + ")")
+                    .with("limit", cfg.maxActiveBookingsPerUser()).with("days", cfg.maxAdvanceDays());
         }
+
+        ZoneId zone = rules.zone();
+        Map<LocalDate, Long> perDay = new TreeMap<>();
+        for (TimeWindow w : adding) {
+            perDay.merge(w.start().atZone(zone).toLocalDate(), Duration.between(w.start(), w.end()).toMinutes(), Long::sum);
+        }
+        for (Map.Entry<LocalDate, Long> day : perDay.entrySet()) {
+            Instant from = day.getKey().atStartOfDay(zone).toInstant();
+            Instant to = day.getKey().plusDays(1).atStartOfDay(zone).toInstant();
+            double booked = bookings.sumBookedMinutes(ownerId, from, to, excludeId);
+            if (booked + day.getValue() > cfg.maxBookedMinutesPerDay()) {
+                reject("quota.daily");
+                int limit = cfg.maxBookedMinutesPerDay();
+                throw ApiException.unprocessable("DAILY_LIMIT_REACHED",
+                        "You can book at most " + hours(limit) + " hours per day; this would exceed it on " + day.getKey())
+                        .with("date", day.getKey().toString()).with("limitHours", hours(limit));
+            }
+        }
+    }
+
+    private static String hours(int minutes) {
+        return minutes % 60 == 0 ? String.valueOf(minutes / 60) : String.format("%.1f", minutes / 60.0);
+    }
+
+    private void reject(String reason) {
+        metrics.counter("booking.rejected", "reason", reason).increment();
     }
 
     private static Booking newBooking(Room room, User user, String title, String description, TimeWindow w,
@@ -310,6 +385,7 @@ public class BookingService {
         } catch (RuntimeException e) {
             if (isOverlapViolation(e)) {
                 log.info("Overlap rejected by database constraint for room {}", room.getId());
+                metrics.counter("booking.rejected", "reason", "conflict").increment();
                 throw conflict();
             }
             throw e;
@@ -332,7 +408,8 @@ public class BookingService {
         return false;
     }
 
-    private static ApiException conflict() {
+    private ApiException conflict() {
+        metrics.counter("booking.rejected", "reason", "conflict").increment();
         return ApiException.conflict("BOOKING_CONFLICT", "The room is already booked for the requested time");
     }
 }

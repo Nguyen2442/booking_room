@@ -5,12 +5,10 @@ import com.company.booking.auth.AuthDtos.LoginRequest;
 import com.company.booking.auth.AuthDtos.TokenResponse;
 import com.company.booking.security.AuthUser;
 import com.company.booking.user.UserDtos.UserResponse;
-import com.company.booking.user.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService auth;
-    private final UserService users;
 
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody LoginRequest req, HttpServletRequest http) {
@@ -39,9 +36,8 @@ public class AuthController {
     }
 
     @PostMapping("/change-password")
-    public ResponseEntity<Void> changePassword(
+    public TokenResponse changePassword(
             @AuthenticationPrincipal AuthUser user, @Valid @RequestBody ChangePasswordRequest req) {
-        users.changePassword(user.id(), req.currentPassword(), req.newPassword());
-        return ResponseEntity.noContent().build();
+        return auth.changePassword(user.id(), req.currentPassword(), req.newPassword());
     }
 }

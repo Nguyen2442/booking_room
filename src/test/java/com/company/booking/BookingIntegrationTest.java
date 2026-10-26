@@ -79,6 +79,8 @@ class BookingIntegrationTest extends IntegrationTestBase {
         book(alice, room, at(1, 9), at(1, 15)).andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("DURATION_TOO_LONG"));
         book(alice, room, at(1, 11), at(1, 10)).andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("INVALID_TIME_RANGE"));
         book(alice, room, at(200, 10), at(200, 11)).andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("TOO_FAR_IN_ADVANCE"));
+        book(alice, room, at(31, 10), at(31, 11)).andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("TOO_FAR_IN_ADVANCE"));
+        book(alice, room, at(29, 10), at(29, 11)).andExpect(status().isCreated());
     }
 
     @Test
@@ -107,7 +109,8 @@ class BookingIntegrationTest extends IntegrationTestBase {
         users.save(alice);
         mvc.perform(post("/api/v1/bookings").header("Authorization", token).contentType("application/json")
                         .content(bookingJson(room, at(1, 10), at(1, 11))))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCOUNT_DISABLED"));
+                // revoked at the door: the token no longer proves anything about a disabled account
+                .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
     }
 
     @Test
@@ -207,12 +210,6 @@ class BookingIntegrationTest extends IntegrationTestBase {
         mvc.perform(get("/api/v1/bookings").header("Authorization", bearer(admin))).andExpect(jsonPath("$.totalElements").value(2));
         mvc.perform(get("/api/v1/bookings?userId=" + bob.getId()).header("Authorization", bearer(admin))).andExpect(jsonPath("$.totalElements").value(1));
         mvc.perform(get("/api/v1/bookings").header("Authorization", bearer(alice))).andExpect(status().isForbidden());
-    }
-
-    @Test
-    void perUserActiveBookingLimit() throws Exception {
-        // limit is 50 in config; lower it by filling the table directly would bypass the service, so assert the message path only
-        assertThat(props.rules().maxActiveBookingsPerUser()).isEqualTo(50);
     }
 
     @Test

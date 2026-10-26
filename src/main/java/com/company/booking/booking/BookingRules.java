@@ -30,7 +30,29 @@ public class BookingRules {
         return rules;
     }
 
+    /** A new single booking (or an edit of one that has not started). */
     public TimeWindow validate(OffsetDateTime startIn, OffsetDateTime endIn) {
+        return validate(startIn, endIn, rules.maxAdvanceDays(), true);
+    }
+
+    /** One occurrence of a recurring booking: may reach further ahead than a single booking. */
+    public TimeWindow validateOccurrence(OffsetDateTime startIn, OffsetDateTime endIn) {
+        return validate(startIn, endIn, rules.maxSeriesDays(), true);
+    }
+
+    /**
+     * Editing a meeting that is already running (extend it, or end it early): the start is history, so only
+     * the shape of the booking and its new end are checked.
+     */
+    public TimeWindow validateOngoing(OffsetDateTime startIn, OffsetDateTime endIn) {
+        TimeWindow w = validate(startIn, endIn, null, false);
+        if (!w.end().isAfter(clock.instant())) {
+            throw ApiException.unprocessable("IN_THE_PAST", "The new end time has already passed");
+        }
+        return w;
+    }
+
+    private TimeWindow validate(OffsetDateTime startIn, OffsetDateTime endIn, Integer horizonDays, boolean checkStartInPast) {
         ZoneId zone = rules.timezone();
         ZonedDateTime s = startIn.atZoneSameInstant(zone);
         ZonedDateTime e = endIn.atZoneSameInstant(zone);
@@ -59,14 +81,21 @@ public class BookingRules {
                     "Maximum duration is " + rules.maxDurationMinutes() + " minutes");
         }
         Instant now = clock.instant();
-        if (s.toInstant().isBefore(now)) {
+        // The current slot stays bookable for a few minutes: picking 14:00 and pressing the button at 14:01 is normal.
+        if (checkStartInPast && s.toInstant().isBefore(now.minus(Duration.ofMinutes(rules.startGraceMinutes())))) {
             throw ApiException.unprocessable("IN_THE_PAST", "Cannot book a time that has already started");
         }
-        if (s.toInstant().isAfter(now.plus(Duration.ofDays(rules.maxAdvanceDays())))) {
-            throw ApiException.unprocessable("TOO_FAR_IN_ADVANCE",
-                    "Bookings can be made at most " + rules.maxAdvanceDays() + " days ahead");
+        // Counted in calendar days (what the date picker shows), not in hours from this very moment.
+        if (horizonDays != null && s.toLocalDate().isAfter(lastBookableDay(horizonDays))) {
+            throw ApiException.unprocessable("TOO_FAR_IN_ADVANCE", "Bookings can be made at most "
+                    + horizonDays + " days ahead");
         }
         return new TimeWindow(s.toInstant(), e.toInstant());
+    }
+
+    /** The last calendar day (company time zone) on which something may start, {@code days} after today. */
+    public java.time.LocalDate lastBookableDay(int days) {
+        return clock.instant().atZone(rules.timezone()).toLocalDate().plusDays(days);
     }
 
     private boolean aligned(ZonedDateTime t) {
@@ -92,14 +121,13 @@ public class BookingRules {
         if (!e.toInstant().isAfter(now)) {
             throw ApiException.unprocessable("IN_THE_PAST", "The block has already ended");
         }
-        Instant horizon = now.plus(Duration.ofDays(rules.maxAdvanceDays()));
-        if (s.toInstant().isAfter(horizon)) {
+        if (s.toLocalDate().isAfter(lastBookableDay(rules.maxSeriesDays()))) {
             throw ApiException.unprocessable("TOO_FAR_IN_ADVANCE",
-                    "Blocks can start at most " + rules.maxAdvanceDays() + " days ahead");
+                    "Blocks can start at most " + rules.maxSeriesDays() + " days ahead");
         }
-        if (Duration.between(s, e).toDays() > rules.maxAdvanceDays()) {
+        if (Duration.between(s, e).toDays() > rules.maxSeriesDays()) {
             throw ApiException.unprocessable("DURATION_TOO_LONG",
-                    "A block can last at most " + rules.maxAdvanceDays() + " days");
+                    "A block can last at most " + rules.maxSeriesDays() + " days");
         }
         return new TimeWindow(s.toInstant(), e.toInstant());
     }

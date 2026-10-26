@@ -20,9 +20,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private static final String PREFIX = "Bearer ";
     private final JwtService jwt;
+    private final UserStatusCache status;
 
-    public JwtAuthFilter(JwtService jwt) {
+    public JwtAuthFilter(JwtService jwt, UserStatusCache status) {
         this.jwt = jwt;
+        this.status = status;
     }
 
     @Override
@@ -30,7 +32,8 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String header = request.getHeader("Authorization");
         if (header != null && header.regionMatches(true, 0, PREFIX, 0, PREFIX.length())) {
-            jwt.parse(header.substring(PREFIX.length()).trim()).ifPresent(user -> {
+            // a valid signature is not enough: the account must still be active and the token not revoked
+            jwt.parse(header.substring(PREFIX.length()).trim()).flatMap(status::verify).ifPresent(user -> {
                 var auth = new UsernamePasswordAuthenticationToken(
                         user, null, List.of(new SimpleGrantedAuthority("ROLE_" + user.role().name())));
                 SecurityContextHolder.getContext().setAuthentication(auth);

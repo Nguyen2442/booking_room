@@ -50,6 +50,10 @@ public class User {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** See V4__token_version.sql: bumping it signs the user out everywhere. */
+    @Column(name = "token_version", nullable = false)
+    private int tokenVersion;
+
     @Version
     private long version;
 

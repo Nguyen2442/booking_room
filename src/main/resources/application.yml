@@ -12,6 +12,8 @@ spring:
       minimum-idle: ${DB_POOL_MIN_IDLE:5}
       connection-timeout: 5000
       max-lifetime: 1500000
+      # Never wait forever: a stuck lock or runaway query must fail fast instead of piling up requests.
+      connection-init-sql: "SET lock_timeout = '5s'; SET statement_timeout = '15s'; SET idle_in_transaction_session_timeout = '30s'"
   jpa:
     open-in-view: false
     hibernate:
@@ -25,6 +27,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # its own connection: migrations must not inherit the short statement_timeout above
+    url: ${spring.datasource.url}
+    user: ${spring.datasource.username}
+    password: ${spring.datasource.password}
   jackson:
     default-property-inclusion: non_null
     serialization:
@@ -80,7 +86,9 @@ logging:
 app:
   jwt:
     secret: ${JWT_SECRET}
-    ttl: ${JWT_TTL:60m}
+    # A workday. Tokens are validated against the account on every request (cached 30 s), so a long TTL does not
+    # mean a long window after a password change, role change or deactivation.
+    ttl: ${JWT_TTL:8h}
     issuer: meeting-room-booking
   rules:
     timezone: ${APP_TIMEZONE:Asia/Ho_Chi_Minh}
@@ -89,12 +97,17 @@ app:
     slot-minutes: 15
     min-duration-minutes: 15
     max-duration-minutes: 240
-    max-advance-days: 90
-    max-active-bookings-per-user: 50
+    max-advance-days: ${MAX_ADVANCE_DAYS:30}
+    max-series-days: ${MAX_SERIES_DAYS:90}
+    max-active-bookings-per-user: ${MAX_ACTIVE_BOOKINGS:20}
+    max-booked-minutes-per-day: ${MAX_BOOKED_MINUTES_PER_DAY:480}
+    start-grace-minutes: 15
   bootstrap:
     admin-email: ${ADMIN_EMAIL:}
     admin-password: ${ADMIN_PASSWORD:}
     admin-name: ${ADMIN_NAME:Administrator}
+  rate-limit:
+    writes-per-minute: ${WRITES_PER_MINUTE:30}
   login-protection:
     max-failures: 5
     lock-duration: 15m

@@ -36,12 +36,30 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     boolean existsConflictExcluding(@Param("roomId") UUID roomId, @Param("start") Instant start,
                                     @Param("end") Instant end, @Param("excludeId") UUID excludeId);
 
+    /** Upcoming bookings of a person that start inside the booking window (these are what the cap counts). */
     @Query("""
             select count(b) from Booking b
             where b.user.id = :userId and b.status = com.company.booking.booking.BookingStatus.CONFIRMED
               and b.kind = com.company.booking.booking.BookingKind.BOOKING
-              and b.endTime > :now""")
-    long countActiveByUser(@Param("userId") UUID userId, @Param("now") Instant now);
+              and b.endTime > :now and b.startTime < :windowEnd and b.id <> :excludeId""")
+    long countActiveInWindow(@Param("userId") UUID userId, @Param("now") Instant now,
+                             @Param("windowEnd") Instant windowEnd, @Param("excludeId") UUID excludeId);
+
+    /** Minutes a person already has booked that start in [from, to): the basis of the per-day limit. */
+    @Query(value = """
+            select coalesce(sum(extract(epoch from (end_time - start_time)) / 60), 0)
+            from bookings
+            where user_id = :userId and kind = 'BOOKING' and status = 'CONFIRMED'
+              and start_time >= :from and start_time < :to and id <> :excludeId""", nativeQuery = true)
+    double sumBookedMinutes(@Param("userId") UUID userId, @Param("from") Instant from,
+                            @Param("to") Instant to, @Param("excludeId") UUID excludeId);
+
+    @Query("""
+            select count(b) > 0 from Booking b
+            where b.room.id = :roomId and b.status = com.company.booking.booking.BookingStatus.CONFIRMED
+              and b.kind = com.company.booking.booking.BookingKind.BOOKING
+              and b.endTime > :now and b.attendees > :capacity""")
+    boolean existsUpcomingOverCapacity(@Param("roomId") UUID roomId, @Param("now") Instant now, @Param("capacity") int capacity);
 
     @Query("""
             select count(b) > 0 from Booking b

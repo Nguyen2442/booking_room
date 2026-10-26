@@ -15,7 +15,8 @@ public class ConfigController {
 
     public record PublicConfig(
             String timezone, String workdayStart, String workdayEnd, int slotMinutes,
-            int minDurationMinutes, int maxDurationMinutes, int maxAdvanceDays) {}
+            int minDurationMinutes, int maxDurationMinutes, int maxAdvanceDays, int maxSeriesDays,
+            int maxActiveBookings, int maxBookedMinutesPerDay, int startGraceMinutes) {}
 
     private final AppProperties props;
 
@@ -23,6 +24,7 @@ public class ConfigController {
     public PublicConfig config() {
         AppProperties.Rules r = props.rules();
         return new PublicConfig(r.timezone().getId(), r.workdayStart().toString(), r.workdayEnd().toString(),
-                r.slotMinutes(), r.minDurationMinutes(), r.maxDurationMinutes(), r.maxAdvanceDays());
+                r.slotMinutes(), r.minDurationMinutes(), r.maxDurationMinutes(), r.maxAdvanceDays(), r.maxSeriesDays(),
+                r.maxActiveBookingsPerUser(), r.maxBookedMinutesPerDay(), r.startGraceMinutes());
     }
 }
