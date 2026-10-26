@@ -1,5 +1,9 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { CalendarCheck, CalendarDays, DoorOpen, ListChecks, LogOut, Search, Ticket, UserCircle, Users, Wrench } from 'lucide-react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import { BellRing, CalendarCheck, CalendarDays, DoorOpen, ListChecks, LogOut, Search, Ticket, UserCircle, Users, Wrench, X } from 'lucide-react';
+import { api } from '../api/client';
+import type { Booking, Page } from '../api/types';
 import { useAuth } from '../lib/auth';
 import { LanguageSwitch, useI18n } from '../lib/i18n';
 import type { Key } from '../lib/messages';
@@ -17,6 +21,41 @@ const admin: NavItem[] = [
   { to: '/admin/blocks', label: 'nav.maintenance', icon: Wrench },
   { to: '/admin/users', label: 'nav.users', icon: Users },
 ];
+
+/**
+ * There is no email: when an administrator cancels someone's upcoming booking (room blocked, account closed...) the
+ * owner would otherwise find out by turning up at a room that is no longer theirs. Show it, once, until dismissed.
+ */
+function CancelledNotice() {
+  const { user } = useAuth();
+  const { tn, t } = useI18n();
+  const storageKey = `booking.cancelNoticeSeen.${user?.id}`;
+  const [seen, setSeen] = useState(() => {
+    try { return localStorage.getItem(storageKey) ?? '1970-01-01T00:00:00Z'; } catch { return '1970-01-01T00:00:00Z'; }
+  });
+  const q = useQuery({
+    queryKey: ['bk', 'mine', 'cancel-notice'],
+    queryFn: () => api<Page<Booking>>('/bookings/my', {
+      query: { status: 'CANCELLED', from: new Date().toISOString(), sort: 'startTime,asc', size: 20 },
+    }),
+    refetchInterval: 60_000,
+  });
+  const fresh = (q.data?.content ?? []).filter((b) => b.cancelledByAnother && b.cancelledAt && Date.parse(b.cancelledAt) > Date.parse(seen));
+  if (!fresh.length) return null;
+  const dismiss = () => {
+    const now = new Date().toISOString();
+    try { localStorage.setItem(storageKey, now); } catch { /* ignore */ }
+    setSeen(now);
+  };
+  return (
+    <div className="notice" role="status">
+      <BellRing size={18} aria-hidden />
+      <span>{tn('notice.cancelled', fresh.length)}</span>
+      <Link className="link" to="/my?tab=cancelled" onClick={dismiss}>{t('notice.view')}</Link>
+      <button className="icon-btn" aria-label={t('notice.dismiss')} onClick={dismiss}><X size={16} /></button>
+    </div>
+  );
+}
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -44,7 +83,7 @@ export function AppLayout() {
           <Button variant="ghost" icon={<LogOut size={16} />} onClick={logout} aria-label={t('common.signOut')}><span className="hide-sm">{t('common.signOut')}</span></Button>
         </div>
       </header>
-      <main id="content" className="content"><Outlet /></main>
+      <main id="content" className="content"><CancelledNotice /><Outlet /></main>
     </div>
   );
 }

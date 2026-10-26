@@ -301,3 +301,10 @@ input[type='checkbox'] { width: 18px; min-height: 18px; accent-color: var(--acce
 /* private bookings seen by someone who may not read them: a neutral "busy" block */
 .tl-booking.masked { background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, var(--border) 6px, var(--border) 7px); color: var(--muted); border-color: var(--border); }
 .dot.masked { background: var(--surface-2); border: 1px solid var(--muted); }
+
+/* long titles / names must wrap instead of stretching the layout */
+.booking-title, .table td, .detail-title h3, .detail-list dd, .conflict-list li { overflow-wrap: anywhere; }
+.cancel-reason { color: var(--muted); margin-top: 2px; font-style: italic; }
+.notice { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--warning-weak); color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent); }
+.notice span { flex: 1; font-weight: 500; }
+.notice .link { color: inherit; text-decoration: underline; }

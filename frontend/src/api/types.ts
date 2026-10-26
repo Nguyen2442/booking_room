@@ -55,6 +55,8 @@ export interface Booking {
   status: BookingStatus;
   cancelledAt?: string;
   cancelReason?: string;
+  /** somebody other than the owner (an administrator) cancelled it */
+  cancelledByAnother?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +77,10 @@ export interface AppConfig {
   minDurationMinutes: number;
   maxDurationMinutes: number;
   maxAdvanceDays: number;
+  maxSeriesDays: number;
+  maxActiveBookings: number;
+  maxBookedMinutesPerDay: number;
+  startGraceMinutes: number;
 }
 
 export interface FreeSlot {

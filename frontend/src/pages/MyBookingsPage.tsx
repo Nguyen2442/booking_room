@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { CalendarX, Lock, Repeat, Ticket } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import type { Booking, Page } from '../api/types';
 import { BookingDetailDialog, bookingPermissions } from '../components/BookingDetailDialog';
@@ -21,7 +21,9 @@ const TABS: { id: Tab; label: Key; empty: Key }[] = [
 export function MyBookingsPage() {
   const { user } = useAuth();
   const { t, dur } = useI18n();
-  const [tab, setTab] = useState<Tab>('upcoming');
+  const [params] = useSearchParams();
+  const initialTab = params.get('tab');
+  const [tab, setTab] = useState<Tab>(initialTab === 'cancelled' || initialTab === 'past' ? initialTab : 'upcoming');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Booking | null>(null);
 
@@ -72,12 +74,13 @@ export function MyBookingsPage() {
                     {b.title}
                     {b.private && <Badge><Lock size={12} aria-hidden /> {t('priv.label')}</Badge>}
                     {b.seriesId && <Badge tone="accent"><Repeat size={12} aria-hidden /> {t('rec.badge')}</Badge>}
-                    {b.status === 'CANCELLED' && <Badge tone="danger">{t('dt.cancelled')}</Badge>}
+                    {b.status === 'CANCELLED' && <Badge tone="danger">{b.cancelledByAnother ? t('my.cancelledByAdmin') : t('dt.cancelled')}</Badge>}
                   </div>
                   <div className="muted small">
                     {formatDate(wallDate(b.startTime), { weekday: 'short', day: 'numeric', month: 'short' })} · {wallTime(b.startTime)}–{wallTime(b.endTime)} ({dur(mins)}) · {b.room.name}
                     {b.attendees ? ` · ${t('my.people', { n: b.attendees })}` : ''}
                   </div>
+                  {b.status === 'CANCELLED' && b.cancelReason && <div className="small cancel-reason">{b.cancelReason}</div>}
                 </div>
                 <div className="booking-actions">
                   <Button variant="secondary" onClick={() => setSelected(b)}>{canCancel ? t('my.manage') : t('my.details')}</Button>

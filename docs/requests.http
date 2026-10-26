@@ -17,6 +17,13 @@ Content-Type: application/json
 GET {{api}}/auth/me
 Authorization: Bearer {{token}}
 
+### Change password: returns a NEW token (every older token is revoked)
+POST {{api}}/auth/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "currentPassword": "Password123!", "newPassword": "NewPassword123!" }
+
 ### Booking rules the UI uses
 GET {{api}}/config
 Authorization: Bearer {{token}}

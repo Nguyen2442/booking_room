@@ -109,3 +109,15 @@ Ký hiệu: **P0** bắt buộc · **P1** nên có · **P2** mở rộng.
 - [ ] Không làm (đã loại): SSO, email/thông báo, mời người tham dự/khách, mọi tích hợp dịch vụ ngoài
 - [ ] P2 Báo cáo sử dụng, audit log, no-show/check-in (chưa làm)
 - [x] P0 Họp riêng tư: che title/mô tả/người đặt/số người/chuỗi lặp ở server; chủ và admin thấy đủ; có test không rò rỉ
+
+## 12. Hoàn thiện / chống lạm dụng
+- [x] P0 Hạn mức cứng: 8 giờ/ngày/người, 20 lịch sắp tới/30 ngày (khóa dòng người dùng, test song song)
+- [x] P0 Giới hạn tốc độ thay đổi booking (30/phút/người), body ≤ 64 KB, nginx giới hạn theo IP
+- [x] P0 Phiên đăng nhập thu hồi được (đổi mật khẩu, đổi quyền, khóa tài khoản có hiệu lực tức thì); đổi mật khẩu trả token mới
+- [x] P0 Luôn còn ít nhất một admin (chống hai admin hạ quyền nhau cùng lúc)
+- [x] P0 Gia hạn / kết thúc sớm cuộc họp đang diễn ra; khung giờ hiện tại đặt được trong 15 phút đầu
+- [x] P0 Chặn giảm sức chứa phòng dưới số người của lịch đã đặt
+- [x] P0 Thông báo trong ứng dụng khi admin hủy lịch của bạn
+- [x] P0 DB timeouts + 503 `SERVICE_BUSY`; log xoay vòng; chặn giả `X-Forwarded-For`; API chỉ mở localhost
+- [x] P0 `prod` từ chối khởi động với secret mẫu; nhật ký kiểm toán; số liệu Micrometer
+- [x] P1 Lưới lịch tự mở rộng cho booking ngoài giờ làm việc cũ

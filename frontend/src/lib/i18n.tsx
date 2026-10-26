@@ -83,7 +83,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       err: (e) => {
         if (!(e instanceof ApiError)) return t('common.unknownError');
         const k = `err.${e.code}` as Key;
-        const base = k in en ? t(k) : e.message;
+        const details: Vars = {};
+        for (const [key, v] of Object.entries(e.problem)) if (typeof v === 'string' || typeof v === 'number') details[key] = v;
+        const base = k in en ? t(k, details) : e.message;
         // series errors arrive as "Occurrence on 2030-01-08: <reason>"; keep the date, localise the reason
         const m = /^Occurrence on (\d{4}-\d{2}-\d{2}): /.exec(e.message);
         return m ? t('err.occurrence', { date: m[1], message: base }) : base;

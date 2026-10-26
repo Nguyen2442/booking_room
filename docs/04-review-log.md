@@ -68,10 +68,61 @@ do test tự động hay do chạy thử bằng trình duyệt thật.
 | 43 | Người ngoài vẫn thấy nút "Thêm vào lịch" cho cuộc họp họ không đọc được | Thừa, gây hiểu nhầm | Ảnh chụp e2e | Ẩn nút khi `masked` |
 | 44 | Script e2e đổi mật khẩu rồi đổi lại: chờ toast cũ nên đóng trình duyệt trước khi request khôi phục chạy | Tài khoản demo bị đổi mật khẩu, về sau đăng nhập sai → throttle 429 | Chạy thật (429 bất thường sau khi restart) | Chờ đúng HTTP response + luôn khôi phục qua API admin ở cuối |
 
-## Rủi ro đã biết (chấp nhận có chủ đích – xem README)
+## Vòng cuối: brainstorm toàn bộ bad case → quyết định
 
-- Token vẫn hợp lệ tới hết TTL sau khi **đổi mật khẩu / hạ quyền admin** (khóa tài khoản thì đã chặn ở thao tác đặt phòng). Giảm thiểu: TTL mặc định 60’. Hướng tiếp theo: `token_version` hoặc refresh token.
-- Throttle đăng nhập nằm trong bộ nhớ từng instance (N instance → giới hạn thực tế N×5). Hướng tiếp theo: giới hạn ở API gateway/Redis.
-- Họp riêng tư không giấu được việc phòng đang bận (cần cho chống trùng lịch), và admin xem được chi tiết (quyết định tin cậy có chủ đích; nếu cần admin cũng không xem, chỉ cần đổi điều kiện trong `BookingMapper.isMasked`).
-- Giới hạn "tối đa 50 booking tương lai/user" là giới hạn mềm (không chống được race hai request song song); **chống trùng lịch thì là bảo đảm cứng** ở DB.
-- Token JWT lưu `localStorage` (dễ bị XSS đánh cắp hơn cookie `HttpOnly`). Giảm thiểu: CSP nghiêm ngặt ở nginx, không render HTML từ người dùng. Hướng tiếp theo: cookie `HttpOnly` + CSRF token.
+Cột cuối ghi rõ **đã xử lý** (có test) hay **chấp nhận có chủ đích**.
+
+### Lạm dụng đặt phòng
+| # | Tình huống xấu | Kết quả |
+|---|---|---|
+| 45 | Một người giữ phòng gần hạn: 50 × 4 giờ = 200/360 giờ-phòng của 3 ngày tới (hơn một nửa) | **Đã xử lý:** tối đa 8 giờ/ngày/người (cộng dồn các phòng), 20 lịch sắp tới/30 ngày |
+| 46 | Hai request song song của một người cùng vượt hạn mức (giới hạn "mềm") | **Đã xử lý:** khóa dòng người dùng trước khi kiểm tra; test 10 luồng → đúng 5 thành công |
+| 47 | Sửa/chuyển booking sang ngày đã "đầy" để lách hạn mức | **Đã xử lý:** sửa cũng kiểm hạn mức (loại trừ chính nó) |
+| 48 | Lịch lặp dùng hết hạn mức gần, hoặc ngược lại lách hạn mức bằng lịch lặp xa | **Đã xử lý:** chỉ buổi trong cửa sổ 30 ngày tính vào hạn mức đếm; hạn mức giờ/ngày áp dụng cho mọi buổi |
+| 49 | Script đặt hàng loạt / phiên bị chiếm | **Đã xử lý:** 30 thay đổi/phút/người (429 + `Retry-After`), admin khóa tài khoản sẽ tự hủy mọi lịch |
+| 50 | Dùng nhiều tài khoản cùng phá | **Chấp nhận:** tài khoản do admin cấp (không tự đăng ký), có nhật ký kiểm toán, số liệu cảnh báo; cần quản lý, không phải kỹ thuật |
+| 51 | Luồng chờ duyệt | **Không làm:** phá lợi thế đặt ngay, tạo nút cổ chai (lý do ở README mục 4) |
+
+### Phiên đăng nhập và quyền
+| # | Tình huống xấu | Kết quả |
+|---|---|---|
+| 52 | Đổi/đặt lại mật khẩu mà token cũ còn dùng được tới hết TTL (kẻ đánh cắp vẫn vào được) | **Đã xử lý:** phiên bản tài khoản trong JWT; đổi mật khẩu trả token mới, mọi phiên cũ mất hiệu lực ngay (test) |
+| 53 | Hạ quyền admin / khóa tài khoản nhưng token vẫn mang role cũ | **Đã xử lý:** role lấy từ DB, thu hồi tức thì (test) |
+| 54 | Hai admin hạ quyền nhau cùng lúc → không còn admin | **Đã xử lý:** khóa advisory + đếm lại, test song song → đúng 1 thành công |
+| 55 | Dò mật khẩu hiện tại bằng token bị đánh cắp qua đổi mật khẩu | **Đã xử lý:** cùng cơ chế khóa như đăng nhập (test) |
+| 56 | Giả `X-Forwarded-For` để né khóa đăng nhập | **Đã xử lý:** nginx ghi đè header; cổng API chỉ mở localhost; kiểm chứng thực tế (6 lần sai với 6 IP giả vẫn bị khóa) |
+| 57 | Chạy "production" với secret/mật khẩu mẫu của compose | **Đã xử lý:** profile `prod` từ chối khởi động (test) |
+| 58 | TTL 60 phút làm người dùng bị đăng xuất giữa ngày | **Đã xử lý:** TTL 8 giờ, an toàn nhờ thu hồi tức thì |
+
+### Thực tế sử dụng
+| # | Tình huống xấu | Kết quả |
+|---|---|---|
+| 59 | Họp lố giờ: người sau vào mà hệ thống không cho gia hạn | **Đã xử lý:** cuộc họp đang diễn ra đổi được giờ kết thúc (kéo dài hoặc kết thúc sớm trả phòng); không đổi được phòng/giờ bắt đầu; vẫn kiểm xung đột (test + e2e) |
+| 60 | Chọn 14:00, bấm đặt lúc 14:01 bị báo "đã qua" | **Đã xử lý:** khung giờ hiện tại đặt được trong 15 phút đầu |
+| 61 | "Đặt trước 30 ngày" tính theo giờ nên ngày cuối bị từ chối ở các khung muộn | **Đã xử lý:** tính theo ngày dương lịch, khớp ô chọn ngày (phát hiện nhờ test) |
+| 62 | Giảm sức chứa phòng khi đã có booking đông người hơn | **Đã xử lý:** 409 `CAPACITY_CONFLICTS_BOOKINGS` (test) |
+| 63 | Admin hủy booking mà người đặt không biết (không có email) | **Đã xử lý:** banner trong ứng dụng, nhãn "Quản trị viên đã hủy" + lý do (e2e) |
+| 64 | Đổi giờ làm việc về sau: booking cũ nằm ngoài lịch, vô hình nhưng vẫn chiếm phòng | **Đã xử lý:** lưới lịch tự mở rộng để luôn hiện |
+| 65 | Tiêu đề rất dài làm vỡ giao diện | **Đã xử lý:** tự xuống dòng; cắt trong lưới |
+| 66 | Lệch múi giờ / đồng hồ máy người dùng | **Đã xử lý trước đó:** mọi phép tính giờ theo múi giờ công ty |
+| 67 | Hai người cùng mở form, một người đặt trước | **Đã xử lý trước đó:** gợi ý khung giờ trống, link tìm phòng khác |
+
+### Hạ tầng
+| # | Tình huống xấu | Kết quả |
+|---|---|---|
+| 68 | Khóa DB / truy vấn treo làm cạn kết nối | **Đã xử lý:** `lock_timeout`, `statement_timeout`, `idle_in_transaction`; 503 `SERVICE_BUSY` (test giữ khóa thật → trả 503 trong ~5 giây rồi tự phục hồi) |
+| 69 | Body JSON khổng lồ | **Đã xử lý:** 64 KB ở nginx và ở app (413, test) |
+| 70 | Log container tăng vô hạn làm đầy đĩa | **Đã xử lý:** xoay vòng 10 MB × 3 |
+| 71 | Không biết ai đã làm gì khi có tranh cãi | **Đã xử lý:** logger `AUDIT` có cấu trúc, chống giả dòng log |
+| 72 | Không thấy đột biến lạm dụng | **Đã xử lý:** số liệu `api_errors_total{code}`, `booking_rejected_total{reason}` |
+| 73 | Test chập chờn vì phụ thuộc giờ chạy test (ngoài giờ làm việc) | **Đã xử lý:** đồng hồ giả lập cho các test phụ thuộc giờ |
+| 74 | Máy ít RAM làm JVM test bị kill | **Đã xử lý:** Postgres test nhẹ, JVM C1 + giới hạn metaspace |
+| 75 | Migration trên DB có dữ liệu cũ | **Đã kiểm chứng:** V2, V3, V4 áp trên DB demo đang chạy |
+
+### Chấp nhận có chủ đích (không phải quên)
+- **Giới hạn tốc độ / khóa đăng nhập theo từng instance:** nhiều replica thì giới hạn thực tế nhân lên; vẫn chặn dò mật khẩu. Hướng nâng cấp: gateway hoặc Redis.
+- **Token ở `localStorage`:** XSS là rủi ro chính; giảm thiểu bằng React (tự escape), CSP chặt, không render HTML người dùng. Hướng nâng cấp: cookie `HttpOnly` + CSRF.
+- **Họp riêng tư không giấu được việc phòng bận; admin xem được chi tiết** (đổi một điều kiện trong `BookingMapper.isMasked` nếu muốn che cả admin).
+- **Trần lịch lặp 26 buổi, sửa từng buổi:** đơn giản, dễ hiểu; sửa cả chuỗi để sau.
+- **Hai người dùng quá nhiều tài khoản/IP:** cần quản lý hành chính, không giải bằng kỹ thuật.
+- **Đồng hồ giữa các instance lệch nhau:** sai số giây không ảnh hưởng quy tắc tính theo phút/ngày.

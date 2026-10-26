@@ -29,7 +29,7 @@ const browser = await chromium.launch();
 async function login(email, pw, viewport = { width: 1360, height: 900 }) {
   const ctx = await browser.newContext({ viewport, acceptDownloads: true });
   const page = await ctx.newPage();
-  page.on('console', (m) => { if (m.type() === 'error' && !/409|422/.test(m.text())) errors.push(`${email}: ${m.text()}`); });
+  page.on('console', (m) => { if (m.type() === 'error' && !/409|422/.test(m.text()) && !(email.startsWith('eve') && /401/.test(m.text()))) errors.push(`${email}: ${m.text()}`); });
   page.on('pageerror', (e) => errors.push(`${email} pageerror: ${e.message}`));
   await page.goto(BASE + '/');
   await page.getByLabel(/^(Email)$/).fill(email);
@@ -154,10 +154,10 @@ const changePw = async (current, next) => {
 };
 if ((await changePw('wrong-wrong', 'NewPassword123!')) !== 422) throw new Error('wrong current password must be rejected');
 await p.getByText('The current password is incorrect.').waitFor();
-if ((await changePw('Password123!', 'NewPassword123!')) !== 204) throw new Error('password change failed');
+if ((await changePw('Password123!', 'NewPassword123!')) !== 200) throw new Error('password change failed');
 await p.screenshot({ path: out('26-account') });
 // restore the demo password so the demo accounts keep working
-if ((await changePw('NewPassword123!', 'Password123!')) !== 204) throw new Error('could not restore the demo password');
+if ((await changePw('NewPassword123!', 'Password123!')) !== 200) throw new Error('could not restore the demo password');
 ok('change password (wrong current rejected, success, restored)');
 await alice.ctx.close();
 
@@ -279,6 +279,111 @@ await admin.ctx.close();
   await ad.page.screenshot({ path: out('39-private-admin') });
   ok('admin sees the full private booking');
   await ad.ctx.close();
+}
+
+// ---------- 6c. realistic situations
+{
+  const aliceTok = await token('alice@company.local', 'Password123!');
+  const adm = await token('admin@company.local', 'Admin12345!');
+
+  // (a) an administrator cancelled my booking: I must be told when I come back
+  const BD2 = addDays(today, 5);
+  await api.post('/api/v1/bookings', { headers: H(aliceTok), data: { roomId: room('K2').id, title: 'E2E will be bumped', attendees: 3,
+    startTime: `${BD2}T10:00:00+07:00`, endTime: `${BD2}T11:00:00+07:00` } });
+  const ad = await login('admin@company.local', 'Admin12345!');
+  await ad.page.goto(BASE + '/admin/blocks');
+  await ad.page.getByRole('button', { name: 'Block a room' }).click();
+  let d = ad.page.locator('dialog[open]');
+  await d.getByLabel('Room', { exact: true }).selectOption(room('K2').id);
+  await d.getByLabel('Start date', { exact: true }).fill(BD2);
+  await d.getByLabel('Start time', { exact: true }).selectOption('09:00');
+  await d.getByLabel('End date', { exact: true }).fill(BD2);
+  await d.getByLabel('End time', { exact: true }).selectOption('12:00');
+  await d.getByLabel('Reason', { exact: true }).fill('E2E fire drill');
+  await d.getByRole('button', { name: 'Block room', exact: true }).click();
+  await d.getByRole('button', { name: 'Cancel them and block the room' }).click();
+  await ad.page.getByText('Room blocked, 1 booking(s) cancelled').waitFor();
+  await ad.ctx.close();
+  const al = await login('alice@company.local', 'Password123!');
+  // the earlier block scenario also bumped one of alice's bookings, so the count is not fixed
+  await al.page.getByText(/An administrator cancelled \d+ of your upcoming bookings\./).waitFor();
+  await al.page.screenshot({ path: out('40-cancel-notice') });
+  await al.page.getByRole('link', { name: 'View' }).click();
+  await al.page.getByText('Cancelled by an administrator').first().waitFor();
+  await al.page.getByText('E2E fire drill').first().waitFor();
+  await al.page.screenshot({ path: out('41-cancelled-by-admin') });
+  await al.page.goto(BASE + '/');
+  if (await al.page.getByText('An administrator cancelled').count()) throw new Error('notice should be gone once viewed');
+  ok('owner is notified when an administrator cancels, sees who/why, and the notice goes away');
+  await al.ctx.close();
+  // lift the block so the demo data stays tidy
+  const blocks = await (await api.get('/api/v1/bookings?kind=BLOCK&status=CONFIRMED&size=50', { headers: H(adm) })).json();
+  for (const b of blocks.content.filter((x) => x.title.startsWith('E2E'))) await api.post(`/api/v1/bookings/${b.id}/cancel`, { headers: H(adm), data: {} });
+
+  // (b) hitting the daily limit: a clear message, not a mystery
+  const bobTok2 = await token('bob@company.local', 'Password123!');
+  const LD = addDays(today, 3);
+  for (const [a, b2] of [['08:00', '12:00'], ['12:00', '16:00']]) {
+    await api.post('/api/v1/bookings', { headers: H(bobTok2), data: { roomId: room('Fuji').id, title: 'E2E long day', attendees: 3,
+      startTime: `${LD}T${a}:00+07:00`, endTime: `${LD}T${b2}:00+07:00` } });
+  }
+  const bo = await login('bob@company.local', 'Password123!');
+  await bo.page.getByRole('button', { name: 'New booking' }).click();
+  d = bo.page.locator('dialog[open]');
+  await d.getByLabel('Title', { exact: true }).fill('E2E over limit');
+  await d.getByLabel('Room', { exact: true }).selectOption(room('Hue').id);
+  await d.getByLabel('Attendees', { exact: true }).fill('2');
+  await d.getByLabel('Date', { exact: true }).fill(LD);
+  await d.getByLabel('Starts', { exact: true }).selectOption('16:00');
+  await d.getByLabel('Ends', { exact: true }).selectOption('17:00');
+  await d.getByText(/Limits: up to 8h of bookings per day/).waitFor();
+  await d.locator('button[type=submit]').click();
+  await d.getByText(/You can book at most 8 hours per day/).waitFor();
+  await bo.page.screenshot({ path: out('42-daily-limit') });
+  ok('daily limit explained to the user');
+  await bo.ctx.close();
+
+  // (c) a session is revoked the moment an administrator resets the password
+  const ev = await login('eve@company.local', 'Password123!');
+  const list = await (await api.get('/api/v1/admin/users?q=eve@company.local', { headers: H(adm) })).json();
+  await api.post(`/api/v1/admin/users/${list.content[0].id}/reset-password`, { headers: H(adm), data: { newPassword: 'Password123!' } });
+  await ev.page.getByRole('link', { name: 'Find a room' }).click();
+  await ev.page.getByRole('heading', { name: 'Sign in' }).waitFor();
+  ok('a revoked session is sent back to the login page');
+  await ev.ctx.close();
+
+  // (d) a meeting that is running can be extended (only possible while the clock is inside working hours)
+  const nowMin = Number(new Date().toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).slice(0, 2)) * 60
+    + Number(new Date().toLocaleTimeString('en-GB', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false }).slice(3, 5));
+  if (nowMin >= 8 * 60 + 15 && nowMin <= 17 * 60) {
+    const hh = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    const startM = Math.floor(nowMin / 15) * 15;
+    // pick whichever room is free right now: real data (someone's own bookings) may occupy any given room
+    const winStart = `${today}T${hh(startM)}:00%2B07:00`, winEnd = `${today}T${hh(startM + 90)}:00%2B07:00`;
+    const free = await (await api.get(`/api/v1/rooms/available?start=${winStart}&end=${winEnd}&size=1`, { headers: H(await token('alice@company.local', 'Password123!')) })).json();
+    if (!free.content.length) { console.log('SKIP running-meeting scenario (no free room right now)'); throw new Error('no free room'); }
+    const mk = await api.post('/api/v1/bookings', { headers: H(await token('alice@company.local', 'Password123!')), data: {
+      roomId: free.content[0].id, title: 'E2E running meeting', attendees: 2,
+      startTime: `${today}T${hh(startM)}:00+07:00`, endTime: `${today}T${hh(startM + 60)}:00+07:00` } });
+    if (mk.status() !== 201) throw new Error('could not create the running meeting: ' + (await mk.text()));
+    const al2 = await login('alice@company.local', 'Password123!');
+    await al2.page.goto(BASE + '/my');
+    await al2.page.locator('.booking-row', { hasText: 'E2E running meeting' }).getByRole('button', { name: 'Manage' }).click();
+    await al2.page.getByRole('button', { name: 'Change end time' }).click();
+    d = al2.page.locator('dialog[open]');
+    await d.getByText('This meeting has already started').waitFor();
+    if (!(await d.getByLabel('Room', { exact: true }).isDisabled()) || !(await d.getByLabel('Starts', { exact: true }).isDisabled())) throw new Error('room/start must be locked');
+    await al2.page.screenshot({ path: out('43-extend-running') });
+    await d.getByLabel('Ends', { exact: true }).selectOption(hh(startM + 90));
+    await d.locator('button[type=submit]').click();
+    await al2.page.getByText('Booking updated').waitFor();
+    const endNow = sql("select to_char(end_time at time zone 'Asia/Ho_Chi_Minh','HH24:MI') from bookings where title='E2E running meeting'").trim();
+    if (endNow !== hh(startM + 90)) throw new Error('end not extended: ' + endNow);
+    ok('running meeting extended by 30 minutes (room/start locked)');
+    await al2.ctx.close();
+  } else {
+    console.log('SKIP running-meeting scenario (needs the clock to be inside working hours)');
+  }
 }
 
 // ---------- 7. Vietnamese walkthrough screenshots

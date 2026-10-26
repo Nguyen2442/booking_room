@@ -89,7 +89,10 @@ export async function api<T = void>(path: string, opts: Options = {}): Promise<T
     const fieldErrors: Record<string, string> = {};
     for (const e of data?.errors ?? []) if (e.field && !fieldErrors[e.field]) fieldErrors[e.field] = e.message;
     const fallback = res.status >= 500 ? 'Something went wrong on our side. Please try again.' : 'Request failed.';
-    throw new ApiError(res.status, data?.code ?? `HTTP_${res.status}`, data?.detail ?? fallback, fieldErrors, data ?? {});
+    // errors produced by nginx or a gateway have no JSON body: map them to codes the UI can translate
+    const proxyCode = res.status === 429 ? 'RATE_LIMITED' : res.status === 413 ? 'PAYLOAD_TOO_LARGE'
+      : [502, 503, 504].includes(res.status) ? 'SERVICE_UNAVAILABLE' : `HTTP_${res.status}`;
+    throw new ApiError(res.status, data?.code ?? proxyCode, data?.detail ?? fallback, fieldErrors, data ?? {});
   }
   return data as T;
 }

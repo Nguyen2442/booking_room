@@ -9,7 +9,7 @@ kể cả khi nhiều người đặt cùng lúc, và đủ chắc chắn để 
 | Database | PostgreSQL 16 (exclusion constraint chống trùng lịch) |
 | Frontend | React 18 + TypeScript + Vite, TanStack Query, phục vụ bởi nginx (proxy `/api`); giao diện **tiếng Anh (mặc định) / tiếng Việt** |
 | Chạy | Docker Compose (db + app + web) |
-| Test | JUnit 5 + MockMvc trên PostgreSQL thật, test đồng thời (101 test) + e2e giao diện bằng Playwright (`e2e/`) |
+| Test | JUnit 5 + MockMvc trên PostgreSQL thật, test đồng thời (129 test) + e2e giao diện bằng Playwright (`e2e/`) |
 
 ## 1. Chạy nhanh
 
@@ -78,9 +78,13 @@ Bản dịch tiếng Việt bị ép đủ khóa lúc biên dịch (TypeScript),
 | Giờ làm việc, theo múi giờ công ty | 08:00–20:00, `Asia/Ho_Chi_Minh` | `OUTSIDE_WORKING_HOURS` |
 | Bước thời gian | 15 phút, giây = 0 | `TIME_NOT_ALIGNED` |
 | Thời lượng | 15 phút – 4 giờ | `DURATION_TOO_SHORT/LONG` |
-| Không đặt quá khứ / tối đa 90 ngày tới | | `IN_THE_PAST`, `TOO_FAR_IN_ADVANCE` |
+| Không đặt quá khứ (khung giờ hiện tại vẫn đặt được trong 15 phút đầu) | | `IN_THE_PAST` |
+| Đặt trước tối đa **30 ngày** (lịch lặp và chặn phòng: **90 ngày**), tính theo ngày dương lịch | | `TOO_FAR_IN_ADVANCE` |
 | Không xuyên ngày | | `CROSS_DAY_BOOKING` |
-| Tối đa 50 booking tương lai/người (giới hạn mềm) | | `BOOKING_LIMIT_REACHED` |
+| Tối đa **20 lịch sắp tới/người** trong 30 ngày tới (**giới hạn cứng**, an toàn khi gửi song song) | | `BOOKING_LIMIT_REACHED` |
+| Tối đa **8 giờ đặt/người/ngày** (cộng dồn mọi phòng) | | `DAILY_LIMIT_REACHED` |
+| Tối đa 30 thao tác thay đổi booking/người/phút | | `RATE_LIMITED` (429) |
+| Cuộc họp **đang diễn ra** chỉ đổi được giờ kết thúc (kéo dài, hoặc kết thúc sớm để trả phòng) | | `BOOKING_ALREADY_STARTED` |
 | Phòng phải đang hoạt động | | `ROOM_INACTIVE` |
 | Số người ≤ sức chứa phòng | bắt buộc nhập | `OVER_CAPACITY` |
 | Lịch lặp: tối đa 26 buổi, mỗi buổi qua đủ các quy tắc trên | | `SERIES_CONFLICT`, `START_ON_WEEKEND` |
@@ -159,7 +163,7 @@ Bước "kiểm tra trước" ở service chỉ để trả lỗi sớm; nếu h
 
 | Method | Path | Quyền |
 |---|---|---|
-| POST | `/auth/login` · GET `/auth/me` · POST `/auth/change-password` | public / user |
+| POST | `/auth/login` · GET `/auth/me` · POST `/auth/change-password` (trả token mới, các phiên cũ bị thu hồi) | public / user |
 | GET | `/config` | user |
 | GET/POST/PUT/DELETE | `/rooms`, `/rooms/{id}`, POST `/rooms/{id}/activate` | đọc: user; ghi: admin |
 | GET | `/rooms/available?start&end&minCapacity&equipment` | user |
@@ -195,7 +199,13 @@ curl -s "localhost:8080/api/v1/rooms/available?start=2030-01-15T10:00:00%2B07:00
 | `.ics` tạo ngay trên trình duyệt | Không cần server/email; dùng được với Google, Outlook, Apple. |
 | **Họp riêng tư: che dữ liệu ở server**, theo người xem, một chỗ duy nhất (`BookingMapper`); mặc định công khai | Che ở UI thì mở DevTools/gọi API vẫn đọc được. Người khác chỉ thấy phòng bận + khung giờ (bắt buộc để chống trùng): ẩn tiêu đề, mô tả, **tên người đặt**, số người, chuỗi lặp, lý do hủy. Chủ booking và **admin vẫn thấy đầy đủ** (admin cần hủy/quản lý; đây là quyết định tin cậy có chủ đích). Không xác định được người xem thì che. Có test kiểm tra không rò rỉ qua lịch ngày, lịch phòng, lỗi trùng lịch, tìm phòng, truy cập trực tiếp, lịch lặp. |
 | Khóa user → tự hủy booking tương lai của họ | Tránh "phòng ma" bị giữ bởi người đã nghỉ. |
-| JWT stateless (HS256, TTL 60’), BCrypt | Scale ngang không cần session; kiểm tra `active` từ DB ở thao tác ghi quan trọng. Đánh đổi: xem mục Rủi ro. |
+| JWT (HS256, TTL 8 giờ) **kèm phiên bản tài khoản**, BCrypt | Mỗi request đối chiếu token với tài khoản (cache 30 giây/instance, hủy cache ngay khi đổi). Đổi mật khẩu, hạ quyền, khóa tài khoản có hiệu lực **tức thì**; nhờ vậy TTL dài (cả ngày làm việc) không tạo cửa sổ rủi ro. Chi phí: 1 truy vấn theo khóa chính/người dùng/30 giây. |
+| Hạn mức mỗi người là **cứng**: khóa dòng người dùng (`FOR UPDATE`) trước khi kiểm tra | Hai request song song của cùng một người không thể cùng lọt qua giới hạn (có test 10 luồng). Thứ tự khóa cố định người dùng → phòng nên không deadlock. |
+| Hạn mức tính trên *lịch sắp tới trong 30 ngày* + *giờ/ngày* | Chặn đúng rủi ro thật (ôm phòng gần hạn: một người từng có thể giữ hơn nửa công suất vài ngày tới); các buổi xa của lịch lặp không chiếm hạn mức gần. |
+| Không có luồng chờ duyệt | Làm mất lợi thế đặt ngay và biến admin thành nút cổ chai cho 200 người; hạn mức + giới hạn tốc độ + khóa tài khoản (tự hủy mọi lịch) giải quyết lạm dụng. |
+| DB: `lock_timeout 5s`, `statement_timeout 15s`, `idle_in_transaction 30s` | Khóa/truy vấn treo không làm cạn kết nối; client nhận 503 `SERVICE_BUSY` + `Retry-After` thay vì treo. Flyway dùng kết nối riêng để migration không bị cắt. |
+| Luôn còn ít nhất một admin (khóa advisory + đếm lại) | Hai admin hạ quyền nhau cùng lúc không thể để hệ thống không còn ai quản trị (có test). |
+| Cấu hình production bị chặn nếu còn giá trị ví dụ | `APP_PROFILE=prod` sẽ **không khởi động** nếu `JWT_SECRET`/`ADMIN_PASSWORD`/`DB_PASSWORD` còn là giá trị mẫu, hoặc chạy chung với profile `demo`. |
 | Lỗi chuẩn RFC 7807 + `code` ổn định | Client xử lý theo `code`, không parse câu chữ. |
 | Flyway + `ddl-auto=validate` | Schema có version, lệch schema là fail ngay khi khởi động. |
 | Cấu hình validate lúc khởi động (`@Validated`) | Cấu hình sai thì dừng, không chạy với quy tắc sai. |
@@ -205,26 +215,32 @@ curl -s "localhost:8080/api/v1/rooms/available?start=2030-01-15T10:00:00%2B07:00
 
 ## 5. Bảo mật
 
-- Mật khẩu BCrypt; mật khẩu > 72 byte bị từ chối thay vì cắt ngầm. Đăng nhập: cùng thông báo cho sai email/mật khẩu/tài khoản khóa, so khớp giả để cân bằng thời gian, khóa tạm sau 5 lần sai (theo IP+email).
+- **Phiên đăng nhập thu hồi được:** token mang phiên bản tài khoản; đổi/đặt lại mật khẩu, đổi vai trò, khóa tài khoản làm các token cũ vô hiệu ngay. Role lấy từ DB, không tin claim trong token.
+- Mật khẩu BCrypt; mật khẩu > 72 byte bị từ chối thay vì cắt ngầm. Đăng nhập: cùng thông báo cho sai email/mật khẩu/tài khoản khóa, so khớp giả để cân bằng thời gian, khóa tạm sau 5 lần sai (theo IP+email). Đổi mật khẩu cũng bị giới hạn số lần đoán mật khẩu hiện tại (chống dò bằng token bị đánh cắp).
+- **Chống giả IP:** nginx *ghi đè* `X-Forwarded-For` bằng địa chỉ thật (không nối thêm), nên không né được khóa đăng nhập bằng header giả. Cổng API 8080 chỉ mở ở `127.0.0.1`: client bắt buộc đi qua nginx (đã kiểm chứng).
+- **Chống lạm dụng:** hạn mức cứng (xem bảng quy tắc), 30 thay đổi/phút/người, nginx giới hạn 50 req/s/IP và 30 đăng nhập/phút/IP (rộng vì cả văn phòng có thể chung một IP), body tối đa 64 KB (nginx và app).
 - Phân quyền: URL (`/admin/**`) + `@PreAuthorize`; USER chỉ thao tác booking của mình; lịch chung không lộ email.
 - **Họp riêng tư** (ví dụ thương lượng lương): tick "Họp riêng tư" khi đặt; người khác không đọc được tiêu đề/mô tả/tên người đặt qua bất kỳ API nào. Giới hạn: không thể giấu việc "phòng đang bận"; admin xem được chi tiết.
-- `X-Request-Id` được làm sạch (chống log injection); không trả stack trace; secret chỉ qua biến môi trường; container backend chạy bằng user không phải root.
-- **Rủi ro đã biết:** token còn hiệu lực tới hết TTL sau khi đổi mật khẩu/hạ quyền; throttle đăng nhập theo từng instance; token ở `localStorage`. Chi tiết và hướng nâng cấp: [docs/04-review-log.md](docs/04-review-log.md).
+- **Nhật ký kiểm toán:** logger `AUDIT` ghi ai làm gì (tạo/sửa/khóa người dùng, đặt lại mật khẩu, thay đổi phòng, chặn phòng, admin hủy booking của người khác, đăng nhập thất bại). Dữ liệu người dùng được làm sạch để không giả được dòng log.
+- `X-Request-Id` được làm sạch; không trả stack trace; secret chỉ qua biến môi trường; container backend chạy bằng user không phải root; log container được xoay vòng (10 MB × 3) để không đầy đĩa.
+- **Rủi ro đã biết:** giới hạn tốc độ và khóa đăng nhập nằm trong bộ nhớ từng instance (N instance → giới hạn thực tế N lần; đặt thêm giới hạn chung ở gateway nếu chạy nhiều replica); token ở `localStorage` (giảm thiểu bằng CSP chặt, không render HTML người dùng; hướng nâng cấp: cookie `HttpOnly` + CSRF). Chi tiết: [docs/04-review-log.md](docs/04-review-log.md).
 
 ## 6. Vận hành và khả năng mở rộng
 
 - **Stateless**: chạy N bản app sau load balancer; trạng thái nằm ở PostgreSQL. Tổng `DB_POOL_SIZE × N` phải ≤ `max_connections` (hoặc dùng PgBouncer).
 - **Truy vấn có index** phù hợp: `(room_id, start_time, end_time)` và `(start_time)` (partial `WHERE status='CONFIRMED'`), `(user_id, start_time)`; chỉ mục GiST của exclusion constraint cũng phục vụ kiểm tra chồng lấn. Mọi danh sách đều phân trang; tránh N+1 (`@BatchSize`, `@EntityGraph`).
-- Quan sát: `/actuator/health/{liveness,readiness}`, `/actuator/prometheus` (cổng 8081), log có `requestId` + `userId`.
+- Quan sát: `/actuator/health/{liveness,readiness}`, `/actuator/prometheus` (cổng 8081, không publish); log có `requestId` + `userId`; số liệu nghiệp vụ `booking_created_total`, `booking_rejected_total{reason}`, `booking_cancelled_total`, `api_errors_total{code}` để đặt cảnh báo (đột biến `RATE_LIMITED`, `DAILY_LIMIT_REACHED`, `SERVICE_BUSY`...).
+- Mất hết admin (hiếm: hệ thống đã chặn việc này) hoặc quên mật khẩu admin: đặt `ADMIN_EMAIL`/`ADMIN_PASSWORD` mới rồi khởi động lại, tài khoản chưa tồn tại sẽ được tạo.
+- Nâng cấp không gián đoạn: migration chỉ **thêm** cột/bảng (tương thích ngược với bản cũ đang chạy); token cũ (chưa có phiên bản) vẫn hợp lệ cho tới khi tài khoản thay đổi.
 - Tắt êm (`graceful shutdown`), `restart: unless-stopped`, healthcheck có `depends_on: service_healthy`.
 - Quy mô hiện tại (200 người, 10 phòng) là rất nhẹ. Nếu bảng `bookings` lên hàng chục triệu dòng: partition theo tháng + lưu trữ dữ liệu cũ; đọc nặng → read replica cho các endpoint lịch.
 - Backup: `pg_dump`/WAL archiving của PostgreSQL (ngoài phạm vi compose).
 
 ## 7. Hạn chế và việc tiếp theo
 
-Chưa làm (có chủ đích): thông báo email, đăng nhập SSO và mọi tích hợp dịch vụ ngoài (đã loại khỏi phạm vi), mời người tham dự / khách (xem phân tích:
-phòng vật lý chỉ cần giữ chỗ; mời chỉ cần khi có họp online), check-in/tự giải phóng no-show, báo cáo sử dụng, audit log, sửa cả chuỗi lặp một lần,
-refresh token / cookie `HttpOnly`, rate-limit tập trung. Admin hủy booking của người khác chỉ để lại lý do ở tab "Đã hủy" (chưa gửi thông báo).
+Chưa làm (có chủ đích): thông báo email (thay bằng thông báo ngay trong ứng dụng khi admin hủy lịch của bạn), đăng nhập SSO và mọi tích hợp dịch vụ ngoài (đã loại khỏi phạm vi),
+mời người tham dự / khách (phòng vật lý chỉ cần giữ chỗ; mời chỉ cần khi có họp online), check-in/tự giải phóng no-show, báo cáo sử dụng, sửa cả chuỗi lặp một lần
+(sửa từng buổi, hủy theo chuỗi), refresh token / cookie `HttpOnly`, giới hạn tốc độ dùng chung giữa các replica.
 
 ## 8. Cấu trúc thư mục
 

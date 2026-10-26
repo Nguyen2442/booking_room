@@ -1,3 +1,10 @@
+# Log rotation for every service: unbounded container logs eventually fill the disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 # Run everything:  docker compose up --build
 # Demo data (10 rooms, sample users) is loaded because APP_PROFILE defaults to "demo".
 # For a real deployment: copy .env.example to .env, set real secrets and APP_PROFILE=prod.
@@ -18,6 +25,7 @@ services:
       timeout: 3s
       retries: 20
     restart: unless-stopped
+    logging: *logging
 
   app:
     build: .
@@ -34,7 +42,9 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@company.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin12345!}
     ports:
-      - "8080:8080" # API + Swagger UI; the management port 8081 (health/metrics) is intentionally not published
+      # Bound to localhost on purpose: clients must go through nginx (:8088), which sets the real client IP and
+      # applies the rate limits. Published on all interfaces, anyone could call the app directly and spoof headers.
+      - "127.0.0.1:8080:8080" # API + Swagger UI; the management port 8081 (health/metrics) is not published at all
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health/readiness | grep -q UP"]
       interval: 10s
@@ -42,6 +52,7 @@ services:
       retries: 12
       start_period: 30s
     restart: unless-stopped
+    logging: *logging
 
   web:
     build:
@@ -54,6 +65,7 @@ services:
     ports:
       - "${WEB_PORT:-8088}:80" # <- open this: http://localhost:8088
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   pgdata:

@@ -24,8 +24,22 @@ export function SchedulePage() {
   const [selected, setSelected] = useState<Booking | null>(null);
   const schedule = useDaySchedule(date);
 
-  const ws = toMinutes(cfg.workdayStart);
-  const we = toMinutes(cfg.workdayEnd);
+  // business hours: where new bookings can be made
+  const bizStart = toMinutes(cfg.workdayStart);
+  const bizEnd = toMinutes(cfg.workdayEnd);
+  // The grid normally shows exactly those hours. If working hours were shortened later, bookings made earlier can
+  // lie outside them; they still occupy the room, so the grid widens (never hides) to include them.
+  const { ws, we } = useMemo(() => {
+    let lo = bizStart, hi = bizEnd;
+    for (const r of schedule.data?.rooms ?? []) {
+      for (const b of r.bookings) {
+        if (b.kind === 'BLOCK') continue;
+        lo = Math.min(lo, Math.floor(toMinutes(wallTime(b.startTime)) / 60) * 60);
+        hi = Math.max(hi, Math.ceil(toMinutes(wallTime(b.endTime)) / 60) * 60);
+      }
+    }
+    return { ws: lo, we: hi };
+  }, [schedule.data, bizStart, bizEnd]);
   const hours = useMemo(() => Array.from({ length: Math.ceil((we - ws) / 60) }, (_, i) => ws + i * 60), [ws, we]);
 
   // Fill the available width on large screens (so titles are readable), scroll on small ones.
@@ -61,10 +75,10 @@ export function SchedulePage() {
       toast.info(t('schedule.passed'));
       return;
     }
-    let s = startMin ?? ws;
+    let s = Math.max(startMin ?? bizStart, bizStart);
     if (isToday && s < nowMin) s = Math.ceil(nowMin / cfg.slotMinutes) * cfg.slotMinutes;
-    s = Math.min(s, we - cfg.minDurationMinutes);
-    setDraft({ roomId, date, start: fromMinutes(s), end: fromMinutes(Math.min(s + 60, we)) });
+    s = Math.min(s, bizEnd - cfg.minDurationMinutes);
+    setDraft({ roomId, date, start: fromMinutes(s), end: fromMinutes(Math.min(s + 60, bizEnd)) });
   }
 
   function rowClick(e: React.MouseEvent<HTMLDivElement>, roomId: string) {

@@ -20,7 +20,8 @@ export function bookingPermissions(b: Booking, user: { id: string; role: string 
   const active = b.status === 'CONFIRMED' && !hasEnded(b.endTime);
   return {
     canCancel: mine && active,
-    canEdit: mine && b.kind === 'BOOKING' && b.status === 'CONFIRMED' && !hasStarted(b.startTime),
+    // until it has ended: once it is running only the end time can change (extend / end early)
+    canEdit: mine && b.kind === 'BOOKING' && b.status === 'CONFIRMED' && !hasEnded(b.endTime),
   };
 }
 
@@ -85,7 +86,7 @@ export function BookingDetailDialog({ booking, onClose }: { booking: Booking | n
                   {isBlock ? t('dt.liftBtn') : t('dt.cancelBtn')}
                 </Button>
               )}
-              {canEdit && <Button variant="primary" icon={<Pencil size={16} />} onClick={() => setEditing(true)}>{t('common.edit')}</Button>}
+              {canEdit && <Button variant="primary" icon={<Pencil size={16} />} onClick={() => setEditing(true)}>{hasStarted(booking.startTime) ? t('dt.changeEnd') : t('common.edit')}</Button>}
             </>
           )
         }
@@ -115,7 +116,11 @@ export function BookingDetailDialog({ booking, onClose }: { booking: Booking | n
           {!masked && booking.private && <Banner tone="info">{t('priv.ownerNote')}</Banner>}
           {booking.description && <p className="detail-desc">{booking.description}</p>}
           {booking.status === 'CANCELLED' && (
-            <Banner tone="info">{booking.cancelReason ? t('dt.cancelledReason', { reason: booking.cancelReason }) : t('dt.cancelledPlain')}</Banner>
+            <Banner tone={booking.cancelledByAnother ? 'warning' : 'info'}>
+              {booking.cancelledByAnother
+                ? (booking.cancelReason ? t('dt.cancelledByAdminReason', { reason: booking.cancelReason }) : t('dt.cancelledByAdmin'))
+                : (booking.cancelReason ? t('dt.cancelledReason', { reason: booking.cancelReason }) : t('dt.cancelledPlain'))}
+            </Banner>
           )}
         </div>
       </Modal>

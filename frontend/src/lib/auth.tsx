@@ -8,6 +8,8 @@ interface AuthState {
   /** true while a stored token is being verified on first load */
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  /** Adopt a token returned by the server (e.g. after a password change, which revokes the old one). */
+  applySession: (res: TokenResponse) => void;
   logout: () => void;
 }
 
@@ -44,9 +46,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [qc],
   );
 
+  const applySession = useCallback(
+    (res: TokenResponse) => {
+      tokenStore.set(res.accessToken);
+      qc.setQueryData(['me'], res.user);
+      setToken(res.accessToken);
+    },
+    [qc],
+  );
+
   const value = useMemo<AuthState>(
-    () => ({ user: token ? (me.data ?? null) : null, loading: !!token && me.isPending, login, logout }),
-    [token, me.data, me.isPending, login, logout],
+    () => ({ user: token ? (me.data ?? null) : null, loading: !!token && me.isPending, login, applySession, logout }),
+    [token, me.data, me.isPending, login, applySession, logout],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

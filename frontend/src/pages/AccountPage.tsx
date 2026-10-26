@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { api, ApiError } from '../api/client';
+import type { TokenResponse } from '../api/types';
 import { Banner, Button, Field, PageHeader } from '../components/ui';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { useToast } from '../lib/toast';
 
 export function AccountPage() {
-  const { user } = useAuth();
+  const { user, applySession } = useAuth();
   const { t, err } = useI18n();
   const toast = useToast();
   const [current, setCurrent] = useState('');
@@ -17,8 +18,9 @@ export function AccountPage() {
   const [serverError, setServerError] = useState('');
 
   const change = useMutation({
-    mutationFn: () => api('/auth/change-password', { method: 'POST', body: { currentPassword: current, newPassword: next } }),
-    onSuccess: () => {
+    mutationFn: () => api<TokenResponse>('/auth/change-password', { method: 'POST', body: { currentPassword: current, newPassword: next } }),
+    onSuccess: (res) => {
+      applySession(res); // the old token was just revoked: keep this session alive with the fresh one
       toast.success(t('ac.changed'));
       setCurrent(''); setNext(''); setConfirm('');
     },

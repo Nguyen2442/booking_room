@@ -7,7 +7,7 @@ import { useConfig, useFreeSlots, useInvalidateBookings, useRoomDay, useRooms } 
 import type { Booking, Frequency, SeriesResponse } from '../api/types';
 import { useI18n } from '../lib/i18n';
 import {
-  addDays, formatDate, fromMinutes, isWeekend, nowMinutesIn, occurrenceDates, todayIn, toMinutes, wallTime, zonedToIso,
+  addDays, formatDate, fromMinutes, hasStarted, isWeekend, nowMinutesIn, occurrenceDates, todayIn, toMinutes, wallTime, zonedToIso,
 } from '../lib/time';
 import { useToast } from '../lib/toast';
 import { Banner, Button, Field, Modal, Spinner } from './ui';
@@ -56,6 +56,10 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
   const we = toMinutes(cfg.workdayEnd);
   const slot = cfg.slotMinutes;
   const maxDate = addDays(today, cfg.maxAdvanceDays);
+  const maxSeriesDate = addDays(today, cfg.maxSeriesDays);
+  const grace = cfg.startGraceMinutes;
+  // a meeting that is already running: only its end can change (extend it, or end early to free the room)
+  const ongoing = !!editing && hasStarted(editing.startTime);
 
   const initial = useMemo(() => {
     if (editing) {
@@ -116,9 +120,12 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
   const endOptions = useMemo(() => {
     const s = toMinutes(start);
     const out: string[] = [];
-    for (let m = s + cfg.minDurationMinutes; m <= Math.min(s + cfg.maxDurationMinutes, we); m += slot) out.push(fromMinutes(m));
+    for (let m = s + cfg.minDurationMinutes; m <= Math.min(s + cfg.maxDurationMinutes, we); m += slot) {
+      if (!ongoing || m > nowMin) out.push(fromMinutes(m));
+    }
     return out;
-  }, [start, we, slot, cfg.minDurationMinutes, cfg.maxDurationMinutes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, we, slot, cfg.minDurationMinutes, cfg.maxDurationMinutes, ongoing]);
 
   function changeStart(v: string) {
     // keep the chosen duration when the start moves, clamped to what is allowed
@@ -129,7 +136,7 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
 
   // ---- recurrence preview (mirrors the server's expansion and the booking horizon)
   const occAll = useMemo(() => (repeat === 'NONE' ? [] : occurrenceDates(date, repeat, 26)), [date, repeat]);
-  const maxOccurrences = occAll.filter((d) => d <= maxDate).length;
+  const maxOccurrences = occAll.filter((d) => d <= maxSeriesDate).length;
   const effectiveOcc = Math.max(2, Math.min(occurrences, maxOccurrences));
   const occDates = useMemo(() => (repeat === 'NONE' ? [] : occurrenceDates(date, repeat, effectiveOcc)), [date, repeat, effectiveOcc]);
   const weekendProblem = repeat === 'WEEKDAYS' && isWeekend(date);
@@ -144,7 +151,7 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
     );
   }, [day.data, start, end, editing?.id]);
 
-  const inPast = isToday && toMinutes(start) < nowMin;
+  const inPast = isToday && !ongoing && toMinutes(start) < nowMin - grace;
   const conflictCode = serverError?.code;
   const free = useFreeSlots(roomId, date, Math.max(duration, slot), conflictCode === 'BOOKING_CONFLICT');
   const suggestions = useMemo(() => (free.data ?? []).filter((f) => f.minutes >= duration).slice(0, 6), [free.data, duration]);
@@ -215,13 +222,14 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
 
   return (
     <form onSubmit={submit} noValidate className="form">
+      {ongoing && <Banner tone="info">{t('bd.ongoingHint')}</Banner>}
       <Field label={t('bd.title')} error={errors.title}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} autoFocus placeholder={t('bd.titlePh')} />
       </Field>
 
       <div className="grid-2">
         <Field label={t('bd.room')} error={errors.roomId} hint={movedRoom ? t('bd.moveHint') : undefined}>
-          <select value={roomId} onChange={(e) => setRoomId(e.target.value)} disabled={rooms.isPending}>
+          <select value={roomId} onChange={(e) => setRoomId(e.target.value)} disabled={rooms.isPending || ongoing}>
             {rooms.isPending && <option>{t('bd.loading')}</option>}
             {roomOptions.map((r) => (
               <option key={r.id} value={r.id}>{t('bd.roomOption', { name: r.name, n: r.capacity })}</option>
@@ -241,7 +249,7 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
 
       <div className="grid-2">
         <Field label={t('common.date')} error={errors.date}>
-          <input type="date" value={date} min={today} max={maxDate} onChange={(e) => e.target.value && setDate(e.target.value)} />
+          <input type="date" value={date} min={today} max={maxDate} disabled={ongoing} onChange={(e) => e.target.value && setDate(e.target.value)} />
         </Field>
         {!editing && (
           <Field label={t('rec.repeat')}>
@@ -257,9 +265,9 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
 
       <div className="grid-2">
         <Field label={t('bd.starts')}>
-          <select value={start} onChange={(e) => changeStart(e.target.value)}>
+          <select value={start} onChange={(e) => changeStart(e.target.value)} disabled={ongoing}>
             {startOptions.map((x) => (
-              <option key={x} value={x} disabled={isToday && toMinutes(x) < nowMin}>{x}</option>
+              <option key={x} value={x} disabled={isToday && toMinutes(x) < nowMin - grace}>{x}</option>
             ))}
           </select>
         </Field>
@@ -280,6 +288,7 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
         ))}
         <span className="muted small">{t('bd.hours', { start: cfg.workdayStart, end: cfg.workdayEnd, max: dur(cfg.maxDurationMinutes) })}</span>
       </div>
+      <p className="muted small">{t('bd.limits', { hours: dur(cfg.maxBookedMinutesPerDay), n: cfg.maxActiveBookings, days: cfg.maxAdvanceDays })}</p>
 
       {repeat !== 'NONE' && !editing && (
         <div className="repeat-box">
@@ -295,9 +304,9 @@ function BookingForm({ onClose, editing, draft }: Omit<Props, 'open'>) {
             <p className="ok-line"><Repeat size={16} aria-hidden /> {t('rec.summary', { n: occDates.length, date: formatDate(occDates[occDates.length - 1], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) })}</p>
           )}
           {!weekendProblem && maxOccurrences < 26 && occurrences > maxOccurrences && maxOccurrences >= 2 && (
-            <p className="muted small">{t('rec.limit', { n: maxOccurrences, days: cfg.maxAdvanceDays })}</p>
+            <p className="muted small">{t('rec.limit', { n: maxOccurrences, days: cfg.maxSeriesDays })}</p>
           )}
-          {maxOccurrences < 2 && !weekendProblem && <Banner tone="warning">{t('rec.limit', { n: maxOccurrences, days: cfg.maxAdvanceDays })}</Banner>}
+          {maxOccurrences < 2 && !weekendProblem && <Banner tone="warning">{t('rec.limit', { n: maxOccurrences, days: cfg.maxSeriesDays })}</Banner>}
         </div>
       )}
 
