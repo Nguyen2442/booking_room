@@ -255,5 +255,5 @@ docker-compose.yml                   db + app + web
 docker-compose.test.yml, scripts/    chạy test trong Docker
 ```
 
-Tài liệu quá trình: [kế hoạch](docs/01-plan.md) · [checklist yêu cầu](docs/02-checklist-requirements.md) ·
-[checklist tính năng](docs/03-checklist-features.md) · [nhật ký review](docs/04-review-log.md).
+Tài liệu dự án: [kế hoạch](docs/01-plan.md) · [checklist sẵn sàng vận hành](docs/02-checklist-requirements.md) ·
+[danh mục tính năng](docs/03-checklist-features.md) · [nhật ký review](docs/04-review-log.md).

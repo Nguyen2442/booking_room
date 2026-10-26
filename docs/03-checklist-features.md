@@ -1,123 +1,114 @@
-# Checklist tính năng chi tiết
+# Danh mục tính năng và trạng thái
 
-Ký hiệu: **P0** bắt buộc · **P1** nên có · **P2** mở rộng.
+Trạng thái hiện tại của từng tính năng. Ký hiệu: **P0** cần có để vận hành · **P1** nên có · **P2** mở rộng.
+`[x]` đã hoàn thành và có kiểm thử · `[ ]` chưa làm.
 
-## 1. Hạ tầng & nền tảng
-- [x] P0 Skeleton Spring Boot 3 / Java 21, Maven wrapper
-- [x] P0 Dockerfile multi-stage, `docker-compose.yml` (app + postgres + healthcheck)
-- [x] P0 Flyway migration chạy khi khởi động
-- [x] P0 Cấu hình qua env (`application.yml` + `.env.example`)
-- [x] P0 Swagger UI `/swagger-ui.html`
-- [x] P1 Actuator health, request-id trong log
-- [x] P1 Profile `demo` seed dữ liệu
+Checklist sẵn sàng vận hành (bảo mật, hạ tầng, quy trình): [02-checklist-requirements.md](02-checklist-requirements.md).
 
-## 2. Xác thực & phân quyền
-- [x] P0 `POST /auth/login` → JWT
-- [x] P0 `GET /auth/me`
-- [x] P0 Seed admin mặc định từ env
-- [x] P0 BCrypt hash mật khẩu
-- [x] P0 Phân quyền: endpoint ADMIN trả 403 với USER
-- [x] P0 Token hết hạn/sai → 401 chuẩn problem+json
-- [x] P1 ADMIN tạo/sửa/khóa user, reset mật khẩu
-- [x] P1 User đổi mật khẩu
-- [ ] P2 Refresh token, rate-limit login
+---
 
-## 3. Quản lý phòng
-- [x] P0 ADMIN tạo phòng (name unique, capacity > 0, vị trí, thiết bị, mô tả)
-- [x] P0 Xem danh sách phòng (phân trang)
-- [x] P0 Lọc theo capacity tối thiểu, thiết bị, trạng thái active
-- [x] P0 Xem chi tiết phòng
-- [x] P0 ADMIN cập nhật phòng
-- [x] P0 ADMIN vô hiệu hóa phòng; chặn nếu còn booking tương lai (409)
-- [x] P1 ADMIN kích hoạt lại phòng
-- [x] P1 Phòng inactive không xuất hiện khi tìm phòng trống / không đặt được
+## 1. Tài khoản và đăng nhập
+- [x] P0 Đăng nhập bằng email/mật khẩu, nhận JWT (hiệu lực 8 giờ); đăng xuất; tự đăng xuất khi phiên hết hạn hoặc bị thu hồi
+- [x] P0 Xem thông tin tài khoản hiện tại
+- [x] P0 Tài khoản quản trị đầu tiên tạo từ biến môi trường (an toàn khi nhiều instance khởi động cùng lúc)
+- [x] P0 Phiên đăng nhập bị thu hồi ngay khi đổi/đặt lại mật khẩu, đổi vai trò, khóa tài khoản
+- [x] P0 Nhân viên tự đổi mật khẩu (trang Tài khoản); phiên khác bị đăng xuất, phiên hiện tại được cấp token mới
+- [x] P0 Khóa tạm khi đăng nhập sai nhiều lần; thông báo giống nhau cho sai email / sai mật khẩu / tài khoản khóa
+- [x] P1 Quản trị viên tạo, sửa, khóa tài khoản và đặt lại mật khẩu; tìm/lọc người dùng
+- [x] P1 Khóa tài khoản tự hủy mọi lịch sắp tới của người đó
+- [x] P1 Quản trị viên không tự khóa/hạ quyền chính mình; luôn còn ít nhất một quản trị viên hoạt động
+- [ ] P2 Refresh token; đăng nhập một lần (SSO) (ngoài phạm vi hiện tại)
 
-## 4. Đặt phòng
-- [x] P0 Tạo booking: room, title, start, end (ISO-8601)
-- [x] P0 **Từ chối trùng lịch → 409 `BOOKING_CONFLICT`** (check ở service + exclusion constraint ở DB)
-- [x] P0 Cho phép back-to-back (`[start, end)`)
-- [x] P0 Quy tắc: end > start
-- [x] P0 Quy tắc: không đặt trong quá khứ
-- [x] P0 Quy tắc: bước 15 phút
-- [x] P0 Quy tắc: thời lượng tối thiểu 15’ / tối đa 4h
-- [x] P0 Quy tắc: trong giờ làm việc (08:00–20:00, múi giờ công ty), cùng ngày
-- [x] P0 Quy tắc: đặt trước tối đa 90 ngày
-- [x] P0 Quy tắc: phòng phải active
-- [x] P0 Xem booking của tôi (lọc from/to/status, phân trang)
-- [x] P0 Xem chi tiết booking (chủ hoặc ADMIN)
-- [x] P0 Hủy booking (chủ hoặc ADMIN), lưu lý do, soft-cancel
-- [x] P0 Không hủy được booking đã kết thúc; hủy lặp lại idempotent/409 rõ ràng
-- [x] P0 Sửa booking (giờ/tiêu đề/mô tả), kiểm tra xung đột lại, loại trừ chính nó
-- [x] P0 USER không sửa/hủy booking của người khác (403)
-- [x] P1 ADMIN xem tất cả booking, lọc theo room/user/time
-- [x] P1 Giới hạn số booking tương lai đang hoạt động / user (cấu hình)
-- [x] P2 Đặt lịch lặp (hằng tuần / 2 tuần / ngày làm việc), hủy từ buổi này trở đi
-- [ ] P2 Người tham dự, thông báo email
-- [ ] P2 Check-in & tự giải phóng no-show
+## 2. Phòng họp
+- [x] P0 Tạo, sửa phòng: tên (không trùng, không phân biệt hoa thường), vị trí, sức chứa, thiết bị, mô tả
+- [x] P0 Danh sách phòng có phân trang, lọc theo sức chứa tối thiểu, thiết bị, trạng thái; nhân viên chỉ thấy phòng đang hoạt động
+- [x] P0 Vô hiệu hóa phòng (không xóa); bị từ chối nếu còn lịch sắp tới; kích hoạt lại được
+- [x] P0 Không giảm sức chứa xuống dưới số người của lịch đã đặt
+- [x] P0 Thiết bị chuẩn hóa (không phân biệt hoa thường), hiển thị theo ngôn ngữ
 
-## 5. Xem lịch
-- [x] P0 Lịch 1 phòng theo ngày / khoảng from–to (sắp xếp theo giờ)
-- [x] P0 Lịch tất cả phòng trong 1 ngày
-- [x] P0 Chỉ hiển thị booking CONFIRMED
-- [x] P1 Hiển thị người đặt + tiêu đề (cân nhắc ẩn chi tiết với user khác – ghi trong README)
-- [x] P2 Thêm vào lịch (.ics, tạo ở trình duyệt cho từng booking). Chưa có feed đăng ký lịch
+## 3. Đặt phòng
+- [x] P0 Đặt phòng: phòng, tiêu đề, mô tả, giờ bắt đầu/kết thúc, số người tham dự
+- [x] P0 Chống trùng lịch ở tầng cơ sở dữ liệu; hai lịch liền kề (10:00–11:00 và 11:00–12:00) không bị coi là trùng
+- [x] P0 Quy tắc thời gian: bước 15 phút; 15 phút đến 4 giờ; trong giờ làm việc (08:00–20:00), cùng một ngày; không đặt giờ đã qua
+- [x] P0 Khung giờ hiện tại vẫn đặt được trong 15 phút đầu
+- [x] P0 Đặt trước tối đa 30 ngày (tính theo ngày dương lịch)
+- [x] P0 Số người tham dự bắt buộc, không vượt sức chứa phòng
+- [x] P0 Sửa lịch (giờ, tiêu đề, mô tả, số người) kèm kiểm tra xung đột lại; **đổi sang phòng khác** được
+- [x] P0 Cuộc họp đang diễn ra: kéo dài hoặc kết thúc sớm để trả phòng (không đổi giờ bắt đầu và phòng)
+- [x] P0 Hủy lịch (chủ lịch hoặc quản trị viên) kèm lý do; không hủy được lịch đã kết thúc; hủy lặp lại trả lỗi rõ
+- [x] P0 Nhân viên chỉ sửa/hủy lịch của mình; xem chi tiết lịch của mình
+- [x] P1 Đặt lịch lặp (hằng tuần, 2 tuần một lần, các ngày làm việc), tối đa 26 buổi, mỗi buổi qua đủ quy tắc
+- [x] P1 Lịch lặp bị trùng: báo đúng ngày trùng; chọn hủy cả chuỗi hoặc bỏ qua các ngày đó
+- [x] P1 Hủy một buổi hoặc "buổi này và các buổi sau"
+- [x] P1 Họp riêng tư (xem mục 6)
+- [x] P1 Thêm vào lịch cá nhân (.ics, tạo ngay trên trình duyệt)
+- [ ] P2 Sửa cả chuỗi lặp một lần
+- [ ] P2 Check-in và tự giải phóng phòng khi không ai đến
+- [ ] P2 Mời người tham dự, thông báo email (phòng vật lý chỉ cần giữ chỗ; cần khi có họp trực tuyến)
 
-## 6. Tìm phòng trống
-- [x] P0 `GET /rooms/available?start&end` trả các phòng active không có booking chồng lấn
-- [x] P0 Lọc `capacity` (≥) và `equipment`
-- [x] P0 Áp dụng cùng validate thời gian như đặt phòng
-- [x] P1 `GET /rooms/{id}/free-slots?date=` liệt kê khoảng trống trong giờ làm việc
-- [x] P1 Sắp xếp kết quả theo độ phù hợp (capacity nhỏ nhất đủ chỗ)
+## 4. Xem lịch và tìm phòng
+- [x] P0 Lịch tất cả phòng theo ngày dạng dòng thời gian; bấm vào ô trống để đặt; vạch "bây giờ"; vùng đã qua
+- [x] P0 Lịch của một phòng theo ngày hoặc khoảng ngày (tối đa 31 ngày)
+- [x] P0 Chỉ hiển thị lịch còn hiệu lực; lịch nằm ngoài giờ làm việc cũ (khi đổi cấu hình) vẫn hiển thị, không bị ẩn
+- [x] P0 Tìm phòng trống theo ngày/giờ, số người, thiết bị; áp dụng cùng quy tắc như đặt phòng
+- [x] P1 Danh sách khoảng trống trong ngày của một phòng; gợi ý khung giờ trống khi vừa bị người khác đặt mất
+- [x] P1 Cảnh báo phòng đang bận ngay trong lúc nhập, trước khi gửi
+- [x] P1 Sắp xếp kết quả tìm phòng theo sức chứa nhỏ nhất đủ chỗ
+- [x] P1 "Lịch của tôi": sắp tới / đã qua / đã hủy; hiển thị lý do hủy và việc quản trị viên đã hủy
 
-## 7. Xử lý lỗi & validation
-- [x] P0 Bean Validation cho mọi request
-- [x] P0 `@RestControllerAdvice` → RFC 7807 với `code`, `detail`, `errors[]`
-- [x] P0 Đúng mã: 400/401/403/404/409/422
-- [x] P0 Không lộ stack trace
+## 5. Quản trị
+- [x] P0 Quản lý phòng và người dùng (mục 1, 2)
+- [x] P0 Xem mọi lịch đặt; lọc theo phòng, người đặt (tìm nhanh theo tên), loại, trạng thái, khoảng ngày; hủy lịch của người khác
+- [x] P0 **Chặn phòng theo khoảng thời gian** (bảo trì, vệ sinh, sự kiện), có thể kéo dài nhiều ngày; hiển thị trên lịch; gỡ chặn
+- [x] P0 Chặn phòng khi đang có lịch trùng: xem danh sách và chọn hủy các lịch đó rồi chặn, hoặc dừng lại
+- [x] P0 Người đặt thấy thông báo trong ứng dụng khi quản trị viên hủy lịch của họ
+- [ ] P2 Báo cáo sử dụng (tỷ lệ lấp đầy từng phòng, giờ cao điểm, lịch bị hủy)
 
-## 8. Kiểm thử
-- [x] P0 Unit test rule validator & overlap
-- [x] P0 Integration test (Testcontainers) cho auth, room, booking, availability
-- [x] P0 **Concurrency test**: N request cùng slot → đúng 1 thành công
-- [x] P0 Test phân quyền (USER vs ADMIN, chủ sở hữu)
-- [x] P1 Test biên: back-to-back, đúng ranh giờ làm việc, phòng inactive
-- [x] P1 CI (GitHub Actions) chạy build + test
+## 6. Riêng tư và phân quyền
+- [x] P0 Họp riêng tư: người khác chỉ thấy phòng đã có người và khung giờ; không thấy tiêu đề, mô tả, người đặt, số người, chuỗi lặp
+- [x] P0 Việc che dữ liệu làm ở server (mọi endpoint); không xác định được người xem thì che
+- [x] P0 Chủ lịch và quản trị viên xem đầy đủ
+- [x] P0 Lịch chung không lộ email của người đặt
+- [x] P0 Phân quyền: quản trị viên / nhân viên / chủ lịch được kiểm tra ở server, có test cho từng endpoint nhạy cảm
 
-## 9. Tài liệu
-- [x] P0 README: chạy, thiết kế, quyết định + lý do, giả định, hạn chế
-- [x] P0 Sơ đồ ERD & luồng đặt phòng (mermaid trong README)
-- [x] P0 Ví dụ curl cho các luồng chính
-- [x] P1 Postman/HTTP collection (`docs/requests.http`)
+## 7. Hạn mức và chống lạm dụng
+- [x] P0 Tối đa 8 giờ đặt mỗi người mỗi ngày, cộng dồn các phòng
+- [x] P0 Tối đa 20 lịch sắp tới mỗi người trong cửa sổ đặt trước; các buổi xa của lịch lặp không chiếm hạn mức này
+- [x] P0 Hạn mức là cứng: nhiều yêu cầu song song của một người không thể cùng vượt
+- [x] P0 Tối đa 30 thay đổi lịch/phút/người (429 kèm `Retry-After`)
+- [x] P0 Thông báo lỗi nêu rõ giới hạn và ngày vi phạm; có bản tiếng Việt
+- [x] P0 Cấu hình được bằng biến môi trường
 
-## 10. Frontend (bổ sung sau kế hoạch ban đầu)
-- [x] P0 Đăng nhập, đăng xuất, tự đăng xuất khi token hết hạn, route theo vai trò
-- [x] P0 Timeline lịch theo ngày, bấm ô trống để đặt, màu "của tôi / người khác / đã qua", vạch "bây giờ"
-- [x] P0 Hộp thoại đặt/sửa phòng: giờ theo quy tắc từ `/config`, cảnh báo phòng bận trước khi gửi, gợi ý giờ trống khi xung đột
-- [x] P0 Tìm phòng trống (ngày, giờ, số chỗ, thiết bị) → đặt ngay
-- [x] P0 Booking của tôi (sắp tới / đã qua / đã hủy), hủy kèm lý do
-- [x] P0 Admin: phòng (thêm/sửa/vô hiệu/kích hoạt), người dùng (tạo/sửa/khóa/đặt lại mật khẩu), tất cả booking (lọc, type-ahead người dùng)
-- [x] P0 Trạng thái loading (skeleton), rỗng, lỗi (có Thử lại), toast, xác nhận hành động nguy hiểm
-- [x] P0 Responsive (thanh điều hướng dưới trên mobile), dark mode, focus rõ ràng, nhãn form truy cập được
-- [x] P1 E2E giao diện bằng Playwright trong `e2e/` (chạy tay trên stack đang chạy; chưa đưa vào CI)
+## 8. Giao diện
+- [x] P0 Đăng nhập; điều hướng theo vai trò; trang quản trị chỉ hiện với quản trị viên
+- [x] P0 Chọn ngôn ngữ tiếng Anh / tiếng Việt (mặc định tiếng Anh, nhớ lựa chọn); lỗi từ server được dịch theo mã lỗi
+- [x] P0 Trạng thái đang tải, danh sách rỗng, lỗi kèm nút thử lại; thông báo ngắn sau thao tác; xác nhận khi hủy/khóa
+- [x] P0 Dùng được trên điện thoại (thanh điều hướng dưới, bảng cuộn ngang); chế độ tối; dùng được bằng bàn phím và trình đọc màn hình
+- [x] P0 Giờ hiển thị và nhập theo múi giờ công ty, không phụ thuộc đồng hồ máy người dùng
+- [x] P1 Lịch tự làm mới định kỳ để thấy lịch người khác vừa đặt
 
-## 11. Bổ sung sau vòng review
-- [x] P0 Số người tham dự bắt buộc, không vượt sức chứa (`OVER_CAPACITY`)
-- [x] P0 Đổi phòng khi sửa booking (kiểm tra xung đột/sức chứa ở phòng mới)
-- [x] P0 Chặn phòng theo khoảng thời gian (admin), tùy chọn hủy booking trùng; hiển thị trên lịch; gỡ chặn
-- [x] P0 Trang Tài khoản: đổi mật khẩu
-- [x] P0 Giao diện tiếng Anh (mặc định) và tiếng Việt, lưu lựa chọn, lỗi server dịch theo mã
-- [ ] Không làm (đã loại): SSO, email/thông báo, mời người tham dự/khách, mọi tích hợp dịch vụ ngoài
-- [ ] P2 Báo cáo sử dụng, audit log, no-show/check-in (chưa làm)
-- [x] P0 Họp riêng tư: che title/mô tả/người đặt/số người/chuỗi lặp ở server; chủ và admin thấy đủ; có test không rò rỉ
+## 9. Vận hành
+- [x] P0 Cấu hình qua biến môi trường; profile `prod` từ chối giá trị mẫu; profile `demo` chỉ dành cho thử nghiệm
+- [x] P0 Health liveness/readiness; số liệu Prometheus; log có `requestId`; nhật ký kiểm toán
+- [x] P0 Migration tự chạy khi khởi động; CSDL và API có timeout; 503 kèm `Retry-After` khi quá tải
+- [x] P1 Dữ liệu mẫu (10 phòng, 5 nhân viên, vài lịch) để chạy thử nhanh ở profile `demo`
+- [ ] P1 Dashboard, cảnh báo, gom log, sao lưu CSDL (xem mục 6 của [02-checklist-requirements.md](02-checklist-requirements.md))
 
-## 12. Hoàn thiện / chống lạm dụng
-- [x] P0 Hạn mức cứng: 8 giờ/ngày/người, 20 lịch sắp tới/30 ngày (khóa dòng người dùng, test song song)
-- [x] P0 Giới hạn tốc độ thay đổi booking (30/phút/người), body ≤ 64 KB, nginx giới hạn theo IP
-- [x] P0 Phiên đăng nhập thu hồi được (đổi mật khẩu, đổi quyền, khóa tài khoản có hiệu lực tức thì); đổi mật khẩu trả token mới
-- [x] P0 Luôn còn ít nhất một admin (chống hai admin hạ quyền nhau cùng lúc)
-- [x] P0 Gia hạn / kết thúc sớm cuộc họp đang diễn ra; khung giờ hiện tại đặt được trong 15 phút đầu
-- [x] P0 Chặn giảm sức chứa phòng dưới số người của lịch đã đặt
-- [x] P0 Thông báo trong ứng dụng khi admin hủy lịch của bạn
-- [x] P0 DB timeouts + 503 `SERVICE_BUSY`; log xoay vòng; chặn giả `X-Forwarded-For`; API chỉ mở localhost
-- [x] P0 `prod` từ chối khởi động với secret mẫu; nhật ký kiểm toán; số liệu Micrometer
-- [x] P1 Lưới lịch tự mở rộng cho booking ngoài giờ làm việc cũ
+## 10. Kiểm thử và tài liệu
+- [x] P0 Test đơn vị, tích hợp (PostgreSQL thật) và đồng thời cho nghiệp vụ lõi; chạy bằng `./scripts/test.sh`
+- [x] P0 Kiểm thử giao diện bằng trình duyệt thật trong `e2e/`
+- [x] P0 CI: test backend, build giao diện, build ảnh Docker
+- [x] P0 README, tài liệu API (Swagger), bộ yêu cầu mẫu, ghi chép rà soát và quyết định
+- [ ] P1 Kiểm thử giao diện chạy trong CI
+- [ ] P1 Kiểm thử tải
+
+## 11. Ngoài phạm vi hiện tại
+Chủ động không làm; ghi rõ lý do để cân nhắc lại khi nhu cầu thay đổi.
+
+| Hạng mục | Lý do | Khi nào xem lại |
+|---|---|---|
+| Phê duyệt trước khi đặt | Mất lợi thế đặt ngay, quản trị viên thành điểm nghẽn cho ~200 người; hạn mức và giới hạn tốc độ đã xử lý lạm dụng | Có phòng đặc biệt (họp hội đồng) cần duyệt riêng |
+| SSO và mọi tích hợp dịch vụ ngoài | Cần dịch vụ danh tính ngoài; tài khoản hiện do quản trị viên cấp | Công ty chuẩn hóa một nhà cung cấp danh tính |
+| Thông báo email | Cần hạ tầng gửi thư; đã có thông báo trong ứng dụng | Có yêu cầu nhắc lịch trước giờ họp |
+| Mời người tham dự / khách | Phòng vật lý chỉ cần giữ chỗ | Có họp trực tuyến hoặc quy trình đón khách |
+| Giới hạn tốc độ dùng chung giữa các replica | Hiện chạy một instance; giới hạn theo instance vẫn chặn dò mật khẩu | Chạy nhiều replica |

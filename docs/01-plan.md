@@ -1,17 +1,17 @@
 # Kế hoạch triển khai – Hệ thống đặt phòng họp (Meeting Room Booking API)
 
-## 1. Tóm tắt bài toán
+## 1. Bối cảnh và mục tiêu
 - ~10 phòng họp, ~200 nhân viên; hiện đặt phòng qua tin nhắn → hay trùng lịch.
-- Cần backend REST API: quản lý phòng, đặt phòng, xem lịch, tìm phòng trống.
+- Cần hệ thống (REST API + giao diện web): quản lý phòng, đặt phòng, xem lịch, tìm phòng trống.
 - 2 vai trò: **USER** (nhân viên) và **ADMIN** (quản trị).
-- Làm như hệ thống chạy thật: đúng nghiệp vụ, an toàn đồng thời (concurrency), có test, có docker, có tài liệu.
+- Yêu cầu vận hành: đúng nghiệp vụ, an toàn khi nhiều người đặt cùng lúc, có kiểm thử, triển khai bằng Docker, có tài liệu.
 
 ## 2. Công nghệ & lý do
 | Hạng mục | Lựa chọn | Lý do |
 |---|---|---|
-| Ngôn ngữ | Java 21 (LTS, tối thiểu 17) | Yêu cầu đề bài |
-| Framework | Spring Boot 3.x (Web, Validation, Security, Data JPA, Actuator) | Yêu cầu đề bài |
-| DB | PostgreSQL 16 | Yêu cầu; hỗ trợ **exclusion constraint** chống trùng lịch ở tầng DB |
+| Ngôn ngữ | Java 21 (LTS) | Bản hỗ trợ dài hạn, hiệu năng và cú pháp hiện đại |
+| Framework | Spring Boot 3.x (Web, Validation, Security, Data JPA, Actuator) | Hệ sinh thái trưởng thành, đội ngũ quen thuộc |
+| DB | PostgreSQL 16 | Hỗ trợ **exclusion constraint** chống trùng lịch ở tầng DB |
 | Migration | Flyway | Schema có version, tái lập được |
 | Auth | JWT (access token) + BCrypt | Stateless, đơn giản cho 200 user |
 | API docs | springdoc-openapi (Swagger UI) | Tự sinh tài liệu API |
